@@ -2184,8 +2184,15 @@ export function PrintEstimateModal({
     window.open(url, "_blank");
   };
 
-  const handleEmailShare = () => {
+  const handleEmailShare = async () => {
     const email = customer.email || "";
+    try {
+      if (estimate.id) {
+        await api.post(`/estimates/${estimate.id}/send-email`);
+      }
+    } catch (e) {
+      // ignore
+    }
     const subject = `Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
     const body = `Dear ${customer.name || "Customer"},\n\nPlease find attached/below our official price quotation estimate ${estimate.number}.\n\nTotal Amount: ₹${total.toLocaleString("en-IN")}\n\nKindly review and confirm.\n\nBest Regards,\nOSCAR AUTO FLUX`;
     window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

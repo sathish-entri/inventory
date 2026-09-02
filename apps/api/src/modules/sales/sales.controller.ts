@@ -26,6 +26,12 @@ export class SalesController {
     return this.sales.listEstimates(user.organizationId);
   }
 
+  @Post("estimates/:id/send-email")
+  @RequirePermissions("estimate:read")
+  sendEstimateEmail(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.sales.sendEstimateEmail(user.organizationId, id);
+  }
+
   @Post("sales-orders")
   @RequirePermissions("sales_order:create")
   createSO(@CurrentUser() user: AuthUser, @Body() dto: CreateSalesOrderDto) {

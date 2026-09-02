@@ -9,7 +9,7 @@ import {
   PaymentDto,
   ReturnDto,
 } from "../catalog/dto";
-import { SHIPPING_PROVIDER, PAYMENT_PROVIDER, type ShippingProvider, type PaymentProvider } from "../integrations/providers";
+import { SHIPPING_PROVIDER, PAYMENT_PROVIDER, EMAIL_PROVIDER, type ShippingProvider, type PaymentProvider, type EmailProvider } from "../integrations/providers";
 import { Inject } from "@nestjs/common";
 
 @Injectable()
@@ -20,7 +20,36 @@ export class SalesService {
     private readonly sequences: SequenceService,
     @Inject(SHIPPING_PROVIDER) private readonly shipping: ShippingProvider,
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
+    @Inject(EMAIL_PROVIDER) private readonly email: EmailProvider,
   ) {}
+
+  async sendEstimateEmail(orgId: string, estimateId: string) {
+    const estimate = await this.prisma.estimate.findFirst({
+      where: { id: estimateId, organizationId: orgId },
+      include: { customer: true },
+    });
+    if (!estimate) throw new NotFoundException("Estimate not found");
+    const customer = estimate.customer;
+    if (!customer?.email) throw new BadRequestException("Customer does not have a registered email address.");
+
+    const subject = `Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
+        <h2>OSCAR AUTO FLUX - Official Price Quotation</h2>
+        <p>Dear <strong>${customer.name}</strong>,</p>
+        <p>Please review your requested price estimate <strong>${estimate.number}</strong>:</p>
+        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #cbd5e1;">
+          <p><strong>Estimate Number:</strong> ${estimate.number}</p>
+          <p><strong>Total Amount:</strong> ₹${Number(estimate.total).toLocaleString("en-IN")}</p>
+          <p><strong>Validity:</strong> Valid for 30 Days</p>
+        </div>
+        <p>Thank you for choosing OSCAR AUTO FLUX!</p>
+      </div>
+    `;
+
+    await this.email.send(customer.email, subject, html);
+    return { success: true, message: `Email quotation sent to ${customer.email}` };
+  }
 
   async createEstimate(orgId: string, customerId: string, lines: CreateSalesOrderDto["lines"], discount = 0) {
     const priced = await this.priceLines(orgId, lines, "sell");
