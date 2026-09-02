@@ -3,8 +3,8 @@ WORKDIR /app
 
 COPY . ./
 
-RUN if [ -f "prisma/schema.prisma" ]; then npx prisma generate --schema=prisma/schema.prisma; else npx prisma generate --schema=apps/api/prisma/schema.prisma; fi
 RUN npm install --include=dev
+RUN if [ -f "prisma/schema.prisma" ]; then npx prisma generate --schema=prisma/schema.prisma; else npx prisma generate --schema=apps/api/prisma/schema.prisma; fi
 RUN if [ -f "tsconfig.build.json" ]; then npx tsc -p tsconfig.build.json; else npm run build -w apps/api; fi
 
 FROM node:20-alpine
