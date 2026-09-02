@@ -2330,7 +2330,12 @@ export function LineItemBuilder({
       if (prod) {
         const price = mode === "selling" ? Number(prod.sellingPrice ?? 0) : Number(prod.costPrice ?? 0);
         next[index].unitPrice = price;
-        next[index].taxRate = Number(prod.taxRate ?? 18);
+        // Keep taxRate statically set (default 18%) unless product specifies a non-zero tax rate
+        if (prod.taxRate !== undefined && prod.taxRate !== null && prod.taxRate > 0) {
+          next[index].taxRate = Number(prod.taxRate);
+        } else if (next[index].taxRate === undefined || next[index].taxRate === null) {
+          next[index].taxRate = 18;
+        }
       }
     }
     onChange(next);
