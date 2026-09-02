@@ -1,0 +1,1045 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductType {
+  BASIC
+  SERIALIZED
+  BATCH
+  COMPOSITE
+}
+
+enum InventoryTxnType {
+  OPENING_STOCK
+  PURCHASE_RECEIVE
+  SALES_SHIPMENT
+  STOCK_ADJUSTMENT
+  STOCK_TRANSFER_OUT
+  STOCK_TRANSFER_IN
+  SALES_RETURN
+  PURCHASE_RETURN
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum SerialStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  RETURNED
+  DAMAGED
+}
+
+enum TransferStatus {
+  DRAFT
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum ReturnStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  RECEIVED
+  COMPLETED
+  REJECTED
+}
+
+enum PackageStatus {
+  DRAFT
+  PACKED
+  SHIPPED
+}
+
+enum ShipmentStatus {
+  DRAFT
+  CONFIRMED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum BatchStrategy {
+  FIFO
+  FEFO
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Organization {
+  id                 String   @id @default(cuid()) @map("_id")
+  name               String
+  slug               String   @unique
+  allowNegativeStock Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users                  User[]
+  roles                  Role[]
+  refreshTokens          RefreshToken[]
+  categories             Category[]
+  brands                 Brand[]
+  units                  Unit[]
+  products               Product[]
+  warehouses             Warehouse[]
+  inventoryStocks        InventoryStock[]
+  inventoryTransactions  InventoryTransaction[]
+  reservations           Reservation[]
+  adjustments            StockAdjustment[]
+  transfers              StockTransfer[]
+  customers              Customer[]
+  vendors                Vendor[]
+  estimates              Estimate[]
+  salesOrders            SalesOrder[]
+  packages               Package[]
+  shipments              Shipment[]
+  invoices               Invoice[]
+  payments               Payment[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseReceives       PurchaseReceive[]
+  bills                  Bill[]
+  vendorPayments         VendorPayment[]
+  salesReturns           SalesReturn[]
+  purchaseReturns        PurchaseReturn[]
+  batches                Batch[]
+  serialNumbers          SerialNumber[]
+  reorderRules           ReorderRule[]
+  auditLogs              AuditLog[]
+  notifications          Notification[]
+  webhookEvents          WebhookEvent[]
+  idempotencyKeys        IdempotencyKey[]
+  files                  FileObject[]
+  integrations           IntegrationConfig[]
+  numberSequences        NumberSequence[]
+}
+
+model User {
+  id               String    @id @default(cuid()) @map("_id")
+  organizationId   String
+  email            String
+  passwordHash     String
+  firstName        String
+  lastName         String
+  isActive         Boolean   @default(true)
+  emailVerifiedAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roles        UserRole[]
+  refreshTokens RefreshToken[]
+  passwordResets PasswordReset[]
+  auditLogs    AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+model Role {
+  id             String @id @default(cuid()) @map("_id")
+  organizationId String
+  name           String
+  isSystem       Boolean @default(false)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions  RolePermission[]
+  users        UserRole[]
+
+  @@unique([organizationId, name])
+}
+
+model Permission {
+  id          String @id @default(cuid()) @map("_id")
+  key         String @unique
+  description String?
+
+  roles RolePermission[]
+}
+
+model RolePermission {
+  id           String @id @default(cuid()) @map("_id")
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id     String @id @default(cuid()) @map("_id")
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model RefreshToken {
+  id             String    @id @default(cuid()) @map("_id")
+  organizationId String
+  userId         String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  replacedById   String?
+  userAgent      String?
+  ip             String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid()) @map("_id")
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NumberSequence {
+  id             String @id @default(cuid()) @map("_id")
+  organizationId String
+  key            String
+  prefix         String
+  nextNumber     Int    @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+}
+
+model Category {
+  id             String  @id @default(cuid()) @map("_id")
+  organizationId String
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products       Product[]
+
+  @@unique([organizationId, name])
+}
+
+model Brand {
+  id             String  @id @default(cuid()) @map("_id")
+  organizationId String
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products       Product[]
+
+  @@unique([organizationId, name])
+}
+
+model Unit {
+  id             String  @id @default(cuid()) @map("_id")
+  organizationId String
+  name           String
+  abbreviation   String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products       Product[]
+
+  @@unique([organizationId, name])
+}
+
+model Product {
+  id                String      @id @default(cuid()) @map("_id")
+  organizationId    String
+  name              String
+  sku               String
+  barcode           String?
+  description       String?
+  type              ProductType @default(BASIC)
+  categoryId        String?
+  brandId           String?
+  unitId            String?
+  sellingPrice      Float       @default(0)
+  costPrice         Float       @default(0)
+  taxRate           Float       @default(0)
+  reorderLevel      Float       @default(0)
+  preferredVendorId String?
+  trackInventory    Boolean     @default(true)
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category        Category?        @relation(fields: [categoryId], references: [id])
+  brand           Brand?           @relation(fields: [brandId], references: [id])
+  unit            Unit?            @relation(fields: [unitId], references: [id])
+  preferredVendor Vendor?          @relation(fields: [preferredVendorId], references: [id])
+  images          ProductImage[]
+  components      ProductComponent[] @relation("CompositeParent")
+  usedIn          ProductComponent[] @relation("CompositeChild")
+  stocks          InventoryStock[]
+  transactions    InventoryTransaction[]
+  batches         Batch[]
+  serials         SerialNumber[]
+  reorderRules    ReorderRule[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, barcode])
+  @@index([organizationId, name])
+}
+
+model ProductImage {
+  id        String @id @default(cuid()) @map("_id")
+  productId String
+  fileId    String
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  file      FileObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+}
+
+model ProductComponent {
+  id               String  @id @default(cuid()) @map("_id")
+  parentProductId  String
+  childProductId   String
+  quantity         Float
+
+  parent Product @relation("CompositeParent", fields: [parentProductId], references: [id], onDelete: Cascade)
+  child  Product @relation("CompositeChild", fields: [childProductId], references: [id])
+
+  @@unique([parentProductId, childProductId])
+}
+
+model Warehouse {
+  id             String  @id @default(cuid()) @map("_id")
+  organizationId String
+  name           String
+  code           String
+  address        String?
+  city           String?
+  state          String?
+  country        String?
+  postalCode     String?
+  isActive       Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stocks       InventoryStock[]
+  transactions InventoryTransaction[]
+  batches      BatchStock[]
+
+  @@unique([organizationId, code])
+}
+
+model InventoryStock {
+  id               String   @id @default(cuid()) @map("_id")
+  organizationId   String
+  productId        String
+  warehouseId      String
+  quantity         Float    @default(0)
+  reservedQuantity Float    @default(0)
+  updatedAt        DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse?   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, productId, warehouseId])
+  @@index([organizationId, warehouseId])
+}
+
+model InventoryTransaction {
+  id             String          @id @default(cuid()) @map("_id")
+  organizationId String
+  productId      String
+  warehouseId    String
+  type           InventoryTxnType
+  quantity       Float
+  beforeQuantity Float
+  afterQuantity  Float
+  referenceType  String
+  referenceId    String
+  reason         String?
+  createdById    String
+  createdAt      DateTime        @default(now())
+  idempotencyKey String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id])
+  warehouse    Warehouse?   @relation(fields: [warehouseId], references: [id])
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, productId, createdAt])
+  @@index([organizationId, referenceType, referenceId])
+}
+
+model Reservation {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  productId      String
+  warehouseId    String
+  quantity       Float
+  referenceType  String
+  referenceId    String
+  releasedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, referenceType, referenceId])
+}
+
+model StockAdjustment {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  warehouseId    String
+  productId      String
+  quantityDelta  Float
+  reason         String
+  notes          String?
+  fileId         String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model StockTransfer {
+  id             String         @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  fromWarehouseId String
+  toWarehouseId   String
+  status         TransferStatus @default(DRAFT)
+  notes          String?
+  createdById    String
+  createdAt      DateTime       @default(now())
+  completedAt    DateTime?
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines        StockTransferLine[]
+
+  @@unique([organizationId, number])
+}
+
+model StockTransferLine {
+  id         String  @id @default(cuid()) @map("_id")
+  transferId String
+  productId  String
+  quantity   Float
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+}
+
+model Customer {
+  id              String   @id @default(cuid()) @map("_id")
+  organizationId  String
+  name            String
+  email           String?
+  phone           String?
+  billingAddress  String?
+  shippingAddress String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  gstin           String?
+  latitude        Float?
+  longitude       Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  estimates    Estimate[]
+  salesOrders  SalesOrder[]
+  invoices     Invoice[]
+  payments     Payment[]
+  salesReturns SalesReturn[]
+
+  @@index([organizationId, name])
+}
+
+model Vendor {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  billingAddress String?
+  shippingAddress String?
+  address        String?
+  city           String?
+  state          String?
+  pincode        String?
+  gstin          String?
+  latitude       Float?
+  longitude      Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products        Product[]
+  purchaseOrders  PurchaseOrder[]
+  bills           Bill[]
+  vendorPayments  VendorPayment[]
+  purchaseReturns PurchaseReturn[]
+
+  @@index([organizationId, name])
+}
+
+model Estimate {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  customerId     String
+  status         String   @default("DRAFT")
+  date           DateTime @default(now())
+  expiryDate     DateTime?
+  subtotal       Float    @default(0)
+  discount       Float    @default(0)
+  tax            Float    @default(0)
+  total          Float    @default(0)
+  notes          String?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  lines        EstimateLine[]
+
+  @@unique([organizationId, number])
+}
+
+model EstimateLine {
+  id          String  @id @default(cuid()) @map("_id")
+  estimateId  String
+  productId   String
+  description String?
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float   @default(0)
+  amount      Float
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+}
+
+model SalesOrder {
+  id             String           @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  customerId     String
+  warehouseId    String
+  status         SalesOrderStatus @default(DRAFT)
+  date           DateTime         @default(now())
+  subtotal       Float            @default(0)
+  discount       Float            @default(0)
+  tax            Float            @default(0)
+  shipping       Float            @default(0)
+  total          Float            @default(0)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  lines        SalesOrderLine[]
+  packages     Package[]
+  shipments    Shipment[]
+  invoices     Invoice[]
+  salesReturns SalesReturn[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+model SalesOrderLine {
+  id           String  @id @default(cuid()) @map("_id")
+  salesOrderId String
+  productId    String
+  description  String?
+  quantity     Float
+  fulfilledQty Float   @default(0)
+  unitPrice    Float
+  taxRate      Float   @default(0)
+  amount       Float
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+}
+
+model Package {
+  id             String        @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  salesOrderId   String
+  status         PackageStatus @default(DRAFT)
+  packedAt       DateTime?
+  createdAt      DateTime      @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder   SalesOrder    @relation(fields: [salesOrderId], references: [id])
+  lines        PackageLine[]
+  shipment     Shipment?
+
+  @@unique([organizationId, number])
+}
+
+model PackageLine {
+  id        String  @id @default(cuid()) @map("_id")
+  packageId String
+  productId String
+  quantity  Float
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+}
+
+model Shipment {
+  id             String         @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  salesOrderId   String
+  packageId      String?        @unique
+  status         ShipmentStatus @default(DRAFT)
+  carrier        String?
+  trackingNumber String?
+  providerRef    String?
+  shippedAt      DateTime?
+  createdAt      DateTime       @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrder   SalesOrder     @relation(fields: [salesOrderId], references: [id])
+  package      Package?       @relation(fields: [packageId], references: [id])
+  lines        ShipmentLine[]
+
+  @@unique([organizationId, number])
+}
+
+model ShipmentLine {
+  id         String  @id @default(cuid()) @map("_id")
+  shipmentId String
+  productId  String
+  quantity   Float
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id             String        @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  customerId     String
+  salesOrderId   String?
+  status         InvoiceStatus @default(DRAFT)
+  date           DateTime      @default(now())
+  dueDate        DateTime?
+  subtotal       Float         @default(0)
+  discount       Float         @default(0)
+  tax            Float         @default(0)
+  shipping       Float         @default(0)
+  total          Float         @default(0)
+  amountPaid     Float         @default(0)
+  pdfFileId      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  salesOrder   SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  lines        InvoiceLine[]
+  payments     PaymentAllocation[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid()) @map("_id")
+  invoiceId   String
+  productId   String?
+  description String
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float   @default(0)
+  amount      Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String        @id @default(cuid()) @map("_id")
+  organizationId String
+  customerId     String
+  amount         Float
+  method         String
+  provider       String        @default("stub")
+  providerRef    String?
+  status         PaymentStatus @default(PENDING)
+  receivedAt     DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer           @relation(fields: [customerId], references: [id])
+  allocations  PaymentAllocation[]
+
+  @@index([organizationId, provider, providerRef])
+}
+
+model PaymentAllocation {
+  id        String  @id @default(cuid()) @map("_id")
+  paymentId String
+  invoiceId String
+  amount    Float
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+model PurchaseOrder {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  vendorId       String
+  warehouseId    String
+  status         String   @default("DRAFT")
+  date           DateTime @default(now())
+  expectedDate   DateTime?
+  subtotal       Float    @default(0)
+  tax            Float    @default(0)
+  total          Float    @default(0)
+  notes          String?
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor       Vendor               @relation(fields: [vendorId], references: [id])
+  lines        PurchaseOrderLine[]
+  receives     PurchaseReceive[]
+  bills        Bill[]
+  purchaseReturns PurchaseReturn[]
+
+  @@unique([organizationId, number])
+}
+
+model PurchaseOrderLine {
+  id              String  @id @default(cuid()) @map("_id")
+  purchaseOrderId String
+  productId       String
+  quantity        Float
+  receivedQty     Float   @default(0)
+  unitCost        Float
+  taxRate         Float   @default(0)
+  amount          Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+}
+
+model PurchaseReceive {
+  id              String   @id @default(cuid()) @map("_id")
+  organizationId  String
+  number          String
+  purchaseOrderId String
+  receivedAt      DateTime @default(now())
+  createdById     String
+
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  lines         PurchaseReceiveLine[]
+
+  @@unique([organizationId, number])
+}
+
+model PurchaseReceiveLine {
+  id                String   @id @default(cuid()) @map("_id")
+  purchaseReceiveId String
+  productId         String
+  quantity          Float
+  batchNumber       String?
+  serialNumbers     String[]
+
+  purchaseReceive PurchaseReceive @relation(fields: [purchaseReceiveId], references: [id], onDelete: Cascade)
+}
+
+model Bill {
+  id              String   @id @default(cuid()) @map("_id")
+  organizationId  String
+  number          String
+  vendorId        String
+  purchaseOrderId String?
+  status          String   @default("DRAFT")
+  date            DateTime @default(now())
+  dueDate         DateTime?
+  total           Float    @default(0)
+  amountPaid      Float    @default(0)
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor        Vendor       @relation(fields: [vendorId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  lines         BillLine[]
+  payments      VendorPaymentAllocation[]
+
+  @@unique([organizationId, number])
+}
+
+model BillLine {
+  id          String  @id @default(cuid()) @map("_id")
+  billId      String
+  productId   String?
+  description String
+  quantity    Float
+  unitCost    Float
+  amount      Float
+
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+}
+
+model VendorPayment {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  vendorId       String
+  amount         Float
+  method         String
+  paidAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor       Vendor       @relation(fields: [vendorId], references: [id])
+  allocations  VendorPaymentAllocation[]
+}
+
+model VendorPaymentAllocation {
+  id              String  @id @default(cuid()) @map("_id")
+  vendorPaymentId String
+  billId          String
+  amount          Float
+
+  vendorPayment VendorPayment @relation(fields: [vendorPaymentId], references: [id], onDelete: Cascade)
+  bill          Bill          @relation(fields: [billId], references: [id])
+}
+
+model SalesReturn {
+  id             String       @id @default(cuid()) @map("_id")
+  organizationId String
+  number         String
+  customerId     String
+  salesOrderId   String?
+  warehouseId    String
+  status         ReturnStatus @default(DRAFT)
+  reason         String?
+  createdAt      DateTime     @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  salesOrder   SalesOrder?       @relation(fields: [salesOrderId], references: [id])
+  lines        SalesReturnLine[]
+
+  @@unique([organizationId, number])
+}
+
+model SalesReturnLine {
+  id            String  @id @default(cuid()) @map("_id")
+  salesReturnId String
+  productId     String
+  quantity      Float
+
+  salesReturn SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
+}
+
+model PurchaseReturn {
+  id              String       @id @default(cuid()) @map("_id")
+  organizationId  String
+  number          String
+  vendorId        String
+  purchaseOrderId String?
+  warehouseId     String
+  status          ReturnStatus @default(DRAFT)
+  reason          String?
+  createdAt       DateTime     @default(now())
+
+  organization  Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor        Vendor               @relation(fields: [vendorId], references: [id])
+  purchaseOrder PurchaseOrder?       @relation(fields: [purchaseOrderId], references: [id])
+  lines         PurchaseReturnLine[]
+
+  @@unique([organizationId, number])
+}
+
+model PurchaseReturnLine {
+  id               String  @id @default(cuid()) @map("_id")
+  purchaseReturnId String
+  productId        String
+  quantity         Float
+
+  purchaseReturn PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+}
+
+model Batch {
+  id              String   @id @default(cuid()) @map("_id")
+  organizationId  String
+  productId       String
+  batchNumber     String
+  manufacturedAt  DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stocks       BatchStock[]
+
+  @@unique([organizationId, productId, batchNumber])
+}
+
+model BatchStock {
+  id          String  @id @default(cuid()) @map("_id")
+  batchId     String
+  warehouseId String
+  quantity    Float   @default(0)
+
+  batch     Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, warehouseId])
+}
+
+model SerialNumber {
+  id             String       @id @default(cuid()) @map("_id")
+  organizationId String
+  productId      String
+  serial         String
+  status         SerialStatus @default(AVAILABLE)
+  warehouseId    String?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, productId, serial])
+}
+
+model ReorderRule {
+  id             String        @id @default(cuid()) @map("_id")
+  organizationId String
+  productId      String
+  warehouseId    String?
+  reorderLevel   Float
+  reorderQty     Float
+  strategy       BatchStrategy @default(FIFO)
+  isActive       Boolean       @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, productId])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  userId         String?
+  action         String
+  resourceType   String
+  resourceId     String
+  oldValues      Json?
+  newValues      Json?
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, resourceType, resourceId])
+}
+
+model Notification {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  userId         String?
+  type           String
+  title          String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model WebhookEvent {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String?
+  provider       String
+  eventId        String
+  eventType      String
+  payload        Json
+  processedAt    DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@unique([provider, eventId])
+}
+
+model IdempotencyKey {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  key            String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+}
+
+model FileObject {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  key            String
+  filename       String
+  mimeType       String
+  size           Int
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productImages ProductImage[]
+}
+
+model IntegrationConfig {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  provider       String
+  type           String
+  config         Json
+  isEnabled      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+}
