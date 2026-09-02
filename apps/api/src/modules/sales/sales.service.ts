@@ -26,7 +26,7 @@ export class SalesService {
   async sendEstimateEmail(orgId: string, estimateId: string) {
     const estimate = await this.prisma.estimate.findFirst({
       where: { id: estimateId, organizationId: orgId },
-      include: { customer: true, lines: { include: { product: true } } },
+      include: { customer: true, lines: true },
     });
     if (!estimate) throw new NotFoundException("Estimate not found");
     const customer = estimate.customer;
