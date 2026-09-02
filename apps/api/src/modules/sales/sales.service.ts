@@ -59,7 +59,7 @@ export class SalesService {
             <span>Estimate Number: <strong>${estimate.number}</strong></span>
             <span>Validity: <strong style="color: #16a34a;">Valid for 30 Days</strong></span>
           </div>
-          <div>Date: <strong>${estimate.createdAt ? new Date(estimate.createdAt).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN")}</strong></div>
+          <div>Date: <strong>{(estimate as any).date ? new Date((estimate as any).date).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN")}</strong></div>
         </div>
 
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px;">
