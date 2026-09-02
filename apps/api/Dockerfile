@@ -16,4 +16,4 @@ ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma db push && if [ -f 'dist/main.js' ]; then node dist/main.js; else node dist/src/main.js; fi"]
+CMD ["sh", "-c", "npx prisma db push && (node dist/apps/api/src/main.js || node dist/src/main.js || node dist/main.js)"]
