@@ -1,7 +1,15 @@
 import axios from "axios";
 
+let apiBaseUrl = import.meta.env.VITE_API_URL || "https://inventory-e32g.onrender.com/api/v1";
+if (apiBaseUrl.endsWith("/")) {
+  apiBaseUrl = apiBaseUrl.slice(0, -1);
+}
+if (!apiBaseUrl.includes("/api/v1")) {
+  apiBaseUrl = `${apiBaseUrl}/api/v1`;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "/api/v1",
+  baseURL: apiBaseUrl,
   withCredentials: true,
 });
 
