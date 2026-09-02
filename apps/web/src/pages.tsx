@@ -164,7 +164,13 @@ export function LoginPage() {
             </button>
             <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)" }}>
               New organization?{" "}
-              <a href="/register" style={{ color: "var(--accent)", fontWeight: 600 }}>Create one →</a>
+              <button
+                type="button"
+                onClick={() => nav("/register")}
+                style={{ background: "none", border: "none", color: "var(--accent)", fontWeight: 600, cursor: "pointer", padding: 0, font: "inherit" }}
+              >
+                Create one →
+              </button>
             </p>
           </form>
         </div>
@@ -178,12 +184,24 @@ export function RegisterPage() {
   const nav = useNavigate();
   const [form, setForm] = useState({ organizationName: "", firstName: "", lastName: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!form.organizationName || !form.firstName || !form.email || !form.password) {
+      setError("Please fill in all required registration fields.");
+      return;
+    }
     setLoading(true);
-    try { await register(form); nav("/"); }
-    finally { setLoading(false); }
+    setError("");
+    try {
+      await register(form);
+      nav("/");
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? err.message ?? "Could not create organization account.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const fields: { key: keyof typeof form; label: string; type?: string }[] = [
@@ -213,6 +231,11 @@ export function RegisterPage() {
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Create your organization</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: 13 }}>Fill in the details to get started.</p>
           <form onSubmit={(e) => void onSubmit(e)} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {error && (
+              <div style={{ background: "#fee2e2", color: "#b91c1c", padding: "10px 14px", borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertCircle size={14} /> {error}
+              </div>
+            )}
             {fields.map(({ key, label, type }) => (
               <InputGroup key={key} label={label}>
                 <input
@@ -229,7 +252,14 @@ export function RegisterPage() {
               {loading ? "Creating…" : "Create account"}
             </button>
             <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)" }}>
-              Already have an account? <a href="/login" style={{ color: "var(--accent)", fontWeight: 600 }}>Sign in</a>
+              Already have an account?{" "}
+              <button
+                type="button"
+                onClick={() => nav("/login")}
+                style={{ background: "none", border: "none", color: "var(--accent)", fontWeight: 600, cursor: "pointer", padding: 0, font: "inherit" }}
+              >
+                Sign in
+              </button>
             </p>
           </form>
         </div>
