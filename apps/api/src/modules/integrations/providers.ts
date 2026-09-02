@@ -76,15 +76,60 @@ export class StubEmailProvider implements EmailProvider {
   }
 }
 
+@Injectable()
+export class ResendEmailProvider implements EmailProvider {
+  readonly name = "resend";
+  private apiKey: string;
+  private from: string;
+
+  constructor(apiKey: string, from = "onboarding@resend.dev") {
+    this.apiKey = apiKey;
+    this.from = from;
+  }
+
+  async send(to: string, subject: string, html: string): Promise<void> {
+    console.log(`[ResendEmailProvider] Sending live email to ${to} via Resend API...`);
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: this.from,
+        to: [to],
+        subject,
+        html,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[ResendEmailProvider Error]", errText);
+      throw new Error(`Resend delivery failed: ${errText}`);
+    }
+    console.log(`[ResendEmailProvider] Live email delivered to ${to}!`);
+  }
+}
+
 export function providerFactory(config: ConfigService) {
+  const emailProviderType = config.get("EMAIL_PROVIDER", "resend");
+  const resendApiKey = config.get("RESEND_API_KEY", "");
+  const emailFrom = config.get("EMAIL_FROM", "onboarding@resend.dev");
+
+  const emailProvider =
+    emailProviderType === "resend" || Boolean(resendApiKey)
+      ? new ResendEmailProvider(resendApiKey, emailFrom)
+      : new StubEmailProvider();
+
   return {
     payment: new StubPaymentProvider(),
     shipping: new StubShippingProvider(),
-    email: new StubEmailProvider(),
+    email: emailProvider,
     selected: {
       payment: config.get("PAYMENT_PROVIDER", "stub"),
       shipping: config.get("SHIPPING_PROVIDER", "stub"),
-      email: config.get("EMAIL_PROVIDER", "stub"),
+      email: emailProviderType,
     },
   };
 }
