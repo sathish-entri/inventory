@@ -2153,6 +2153,227 @@ type Estimate = {
   lines?: { productId: string; quantity: string; unitPrice: string; taxRate: string }[];
 };
 
+// ─────────────────────────────────────────────────────────
+// PRINTABLE ESTIMATE QUOTATION MODAL
+// ─────────────────────────────────────────────────────────
+export function PrintEstimateModal({
+  estimate,
+  onClose,
+}: {
+  estimate: any;
+  onClose: () => void;
+}) {
+  if (!estimate) return null;
+
+  const customer = estimate.customer || {};
+  const total = Number(estimate.total || 0);
+  const subtotal = Number(estimate.subtotal || total);
+  const tax = Number(estimate.tax || 0);
+  const lines = estimate.lines ?? [];
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleWhatsAppShare = () => {
+    const phone = (customer.phone || "").replace(/\D/g, "");
+    const text = `Hello ${customer.name || "Customer"},\n\nHere is your official Price Estimate Quote *${estimate.number}* from OSCAR AUTO FLUX.\n\n*Total Quote Amount:* ₹${total.toLocaleString("en-IN")}\n*Validity:* Valid for 30 Days\n\nPlease let us know if you would like us to confirm and process this order.\n\nThank you!`;
+    const url = phone
+      ? `https://wa.me/${phone.length === 10 ? "91" + phone : phone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  };
+
+  const handleEmailShare = () => {
+    const email = customer.email || "";
+    const subject = `Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
+    const body = `Dear ${customer.name || "Customer"},\n\nPlease find attached/below our official price quotation estimate ${estimate.number}.\n\nTotal Amount: ₹${total.toLocaleString("en-IN")}\n\nKindly review and confirm.\n\nBest Regards,\nOSCAR AUTO FLUX`;
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const stateStr = (customer?.state || "").toLowerCase();
+  const isTN = !stateStr || stateStr.includes("tamil") || stateStr.includes("tn") || stateStr.startsWith("33");
+
+  return (
+    <Modal
+      open={!!estimate}
+      onClose={onClose}
+      title={`Price Estimate Quote PDF — ${estimate.number}`}
+      footer={
+        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="button" className="btn btn-secondary" onClick={handleWhatsAppShare} style={{ background: "#16a34a", color: "#fff", border: "none" }}>
+              💬 Share on WhatsApp
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={handleEmailShare}>
+              ✉️ Email Quotation
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn btn-secondary" onClick={onClose}>Close</button>
+            <button className="btn btn-primary" onClick={handlePrint}>
+              <Printer size={15} /> Print / Save PDF
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <div id="printable-invoice-container">
+        <div className="inv-box">
+          <div style={{ position: "absolute", top: 12, right: 16, fontSize: 11, fontWeight: 700, textTransform: "uppercase", border: "1px solid #000", padding: "2px 8px", background: "#fef3c7", color: "#92400e" }}>
+            OFFICIAL PRICE ESTIMATE
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr", borderBottom: "1.5px solid #000", paddingBottom: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#1e3a8a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16 }}>
+                  OAF
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#1e3a8a", letterSpacing: "0.5px" }}>
+                    OSCAR AUTO FLUX
+                  </h2>
+                  <div style={{ fontSize: 10, fontStyle: "italic", color: "#475569" }}>
+                    Manufacturers of Welding consumables | ISO 9001:2015 company
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 10, marginTop: 8, lineHeight: 1.4 }}>
+                S.F.No.517/1, Veerampalayam, Kangeyam, Tiruppur.<br />
+                State: Tamilnadu. PIN: 638701<br />
+                <strong>GSTIN:</strong> 33CQZPR8943L1ZM | <strong>MSME:</strong> UDYAM-TN-28-0165042
+              </div>
+            </div>
+
+            <div style={{ borderLeft: "1.5px solid #000", paddingLeft: 12 }}>
+              <h3 style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 800, textAlign: "right", letterSpacing: "1px", color: "#1e3a8a" }}>
+                PRICE QUOTATION
+              </h3>
+              <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: "2px 0" }}>Estimate Number:</td>
+                    <td style={{ textAlign: "right", fontWeight: 700 }}>{estimate.number}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: "2px 0" }}>Quote Date:</td>
+                    <td style={{ textAlign: "right" }}>{estimate.createdAt ? new Date(estimate.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: "2px 0" }}>Validity:</td>
+                    <td style={{ textAlign: "right", color: "#047857", fontWeight: 700 }}>Valid for 30 Days</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ padding: 8, background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 6, marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, background: "#e2e8f0", padding: "2px 6px", marginBottom: 4 }}>
+              Quotation Issued To (Customer)
+            </div>
+            <strong style={{ fontSize: 13 }}>{customer.name ?? "Valued Customer"}</strong>
+            <div style={{ fontSize: 11, color: "#334155", marginTop: 2, lineHeight: 1.4 }}>
+              {customer.billingAddress || customer.address || ""}<br />
+              {customer.city ? `${customer.city}, ` : ""}{customer.state ? `${customer.state} ` : ""}{customer.pincode || ""}<br />
+              {customer.phone ? `Ph: ${customer.phone} ` : ""}{customer.email ? `| Email: ${customer.email}` : ""}<br />
+              <strong>GSTIN:</strong> {customer.gstin || "URP (Unregistered)"}
+            </div>
+          </div>
+
+          <table className="inv-table">
+            <thead>
+              <tr>
+                <th style={{ width: "30px" }}>#</th>
+                <th>Item Description</th>
+                <th style={{ width: "70px" }}>Qty</th>
+                <th style={{ width: "80px" }}>Rate (₹)</th>
+                <th style={{ width: "90px" }}>Tax %</th>
+                <th style={{ width: "100px" }}>Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l: any, i: number) => {
+                const lineQty = Number(l.quantity || 1);
+                const linePrice = Number(l.unitPrice || 0);
+                const lineSubtotal = lineQty * linePrice;
+                const lineTaxRate = Number(l.taxRate || 18);
+                const lineTaxAmt = lineSubtotal * (lineTaxRate / 100);
+
+                return (
+                  <tr key={i}>
+                    <td style={{ textAlign: "center" }}>{i + 1}</td>
+                    <td><strong>{l.product?.name ?? l.description ?? "Item"}</strong></td>
+                    <td style={{ textAlign: "right" }}>{lineQty}</td>
+                    <td style={{ textAlign: "right" }}>{linePrice.toFixed(2)}</td>
+                    <td style={{ textAlign: "center" }}>{lineTaxRate}%</td>
+                    <td style={{ textAlign: "right" }}>{(lineSubtotal + lineTaxAmt).toFixed(2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1.4fr", border: "1px solid #000", borderTop: "none" }}>
+            <div style={{ padding: 8, borderRight: "1px solid #000", fontSize: 10 }}>
+              <div style={{ marginBottom: 10 }}>
+                <strong>Total in Words:</strong>
+                <div style={{ fontWeight: 700, fontSize: 11, fontStyle: "italic", marginTop: 2, color: "#1e293b" }}>
+                  {numberToWordsINR(total)}
+                </div>
+              </div>
+              <div style={{ borderTop: "1px solid #cbd5e1", paddingTop: 6 }}>
+                <strong>Bank Details for Advance / Settlement:</strong>
+                <div style={{ marginTop: 2, lineHeight: 1.4 }}>
+                  Bank: <strong>INDIAN OVERSEAS BANK</strong> | Branch: <strong>Kangayam</strong><br />
+                  A/C Name: <strong>OSCAR AUTO FLUX</strong> | A/C No: <strong>186302000000680</strong><br />
+                  IFSC: <strong>IOBA0001863</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 11 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr style={{ borderBottom: "1px solid #000" }}>
+                    <td style={{ padding: "6px 8px", fontWeight: 600 }}>Sub Total:</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700 }}>₹{subtotal.toFixed(2)}</td>
+                  </tr>
+                  {isTN ? (
+                    <>
+                      <tr style={{ borderBottom: "1px solid #000" }}>
+                        <td style={{ padding: "6px 8px" }}>SGST (9%):</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right" }}>₹{(tax / 2).toFixed(2)}</td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #000" }}>
+                        <td style={{ padding: "6px 8px" }}>CGST (9%):</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right" }}>₹{(tax / 2).toFixed(2)}</td>
+                      </tr>
+                    </>
+                  ) : (
+                    <tr style={{ borderBottom: "1px solid #000" }}>
+                      <td style={{ padding: "6px 8px" }}>IGST (18%):</td>
+                      <td style={{ padding: "6px 8px", textAlign: "right" }}>₹{tax.toFixed(2)}</td>
+                    </tr>
+                  )}
+                  <tr style={{ borderBottom: "1.5px solid #000", background: "#f8fafc" }}>
+                    <td style={{ padding: "8px", fontWeight: 800, fontSize: 12 }}>Total Quote:</td>
+                    <td style={{ padding: "8px", textAlign: "right", fontWeight: 800, fontSize: 13, color: "#047857" }}>
+                      ₹{total.toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function EstimatesPage() {
   const list = useList<Estimate>("estimates", "/estimates");
   const customers = useList<{ id: string; name: string; state?: string }>("customers", "/customers");
@@ -2164,6 +2385,7 @@ export function EstimatesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ customerId: "", warehouseId: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
+  const [printEstimate, setPrintEstimate] = useState<Estimate | null>(null);
 
   const selectedCustomer = (customers.data ?? []).find((c) => c.id === form.customerId);
 
@@ -2220,27 +2442,36 @@ export function EstimatesPage() {
     { label: "Date / Expiry", render: (r) => r.createdAt ? new Date(r.createdAt).toLocaleDateString() : (r.expiryDate ? new Date(r.expiryDate).toLocaleDateString() : "—") },
     { label: "Total Quote", align: "right", render: (r) => <strong>{money(Number(r.total))}</strong> },
     {
-      label: "Action",
+      label: "Actions",
       align: "right",
       render: (r) => (
-        <button
-          className="btn btn-primary btn-sm"
-          disabled={convertToOrder.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            convertToOrder.mutate(r);
-          }}
-        >
-          {convertToOrder.isPending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <ShoppingCart size={13} />}
-          Convert to Order
-        </button>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => { e.stopPropagation(); setPrintEstimate(r); }}
+            title="View, Print PDF or Send via WhatsApp / Email"
+          >
+            <Printer size={13} color="var(--accent)" /> Share / PDF
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={convertToOrder.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              convertToOrder.mutate(r);
+            }}
+          >
+            {convertToOrder.isPending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <ShoppingCart size={13} />}
+            Convert to Order
+          </button>
+        </div>
       ),
     },
   ];
 
   return (
     <div>
-      <PageHeader title="Estimates & Quotes" subtitle="Create price quotations for customers before confirming orders">
+      <PageHeader title="Estimates & Quotes" subtitle="Create price quotations for customers, share via WhatsApp/PDF, and convert to confirmed orders">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           <Plus size={15} /> Create Estimate Quote
         </button>
@@ -2303,6 +2534,9 @@ export function EstimatesPage() {
 
         <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
       </Modal>
+
+      {/* Printable / Shareable Estimate PDF Modal */}
+      <PrintEstimateModal estimate={printEstimate} onClose={() => setPrintEstimate(null)} />
     </div>
   );
 }
