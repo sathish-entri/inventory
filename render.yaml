@@ -3,9 +3,8 @@ services:
   - type: web
     name: inventra-api
     env: node
-    rootDir: apps/api
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npx prisma db push && node dist/src/main.js
+    buildCommand: npm install && npx prisma generate --schema=apps/api/prisma/schema.prisma && npm run build -w apps/api
+    startCommand: npx prisma db push --schema=apps/api/prisma/schema.prisma && node apps/api/dist/src/main.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -28,6 +27,5 @@ services:
   - type: web
     name: inventra-web
     env: static
-    rootDir: apps/web
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npm run build -w apps/web
     staticPublishPath: apps/web/dist
