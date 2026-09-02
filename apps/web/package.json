@@ -14,7 +14,7 @@
     "@ant-design/charts": "^2.6.7",
     "@ant-design/icons": "^6.3.4",
     "@hookform/resolvers": "^5.2.1",
-    "@inventra/shared": "1.0.0",
+    "@inventra/shared": "*",
     "@tanstack/react-query": "^5.85.5",
     "antd": "^6.6.2",
     "axios": "^1.11.0",

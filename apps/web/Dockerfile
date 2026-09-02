@@ -1,11 +1,15 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-COPY . ./
+COPY package.json package-lock.json* ./
+COPY packages/shared ./packages/shared
+COPY apps/web ./apps/web
 
-RUN npm install --include=dev
-RUN if [ -f "vite.config.ts" ]; then npm run build; else npm run build -w apps/web; fi
+RUN npm install
+WORKDIR /app/apps/web
+RUN npm run build
 
 FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html 2>/dev/null || COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf 2>/dev/null || true
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
