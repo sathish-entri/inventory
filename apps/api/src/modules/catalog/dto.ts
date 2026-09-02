@@ -193,11 +193,34 @@ export class LineDto {
   description?: string;
 }
 
+export class CreateEstimateDto {
+  @IsString()
+  customerId!: string;
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => LineDto)
+  lines!: LineDto[];
+  @IsOptional()
+  @IsNumber()
+  discount?: number;
+  @IsOptional()
+  @IsNumber()
+  shipping?: number;
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 export class CreateSalesOrderDto {
   @IsString()
   customerId!: string;
+  @IsOptional()
   @IsString()
-  warehouseId!: string;
+  warehouseId?: string;
   @IsArray()
   @ArrayNotEmpty()
   @ValidateNested({ each: true })

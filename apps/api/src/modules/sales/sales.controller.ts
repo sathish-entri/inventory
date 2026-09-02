@@ -5,7 +5,7 @@ import { SalesService } from "./sales.service";
 import { CurrentUser, type AuthUser } from "../../common/current-user.decorator";
 import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
-import { CreateSalesOrderDto, PackageDto, PaymentDto, ReturnDto } from "../catalog/dto";
+import { CreateEstimateDto, CreateSalesOrderDto, PackageDto, PaymentDto, ReturnDto } from "../catalog/dto";
 
 @ApiTags("sales")
 @ApiBearerAuth()
@@ -16,7 +16,7 @@ export class SalesController {
 
   @Post("estimates")
   @RequirePermissions("estimate:create")
-  createEstimate(@CurrentUser() user: AuthUser, @Body() dto: CreateSalesOrderDto) {
+  createEstimate(@CurrentUser() user: AuthUser, @Body() dto: CreateEstimateDto) {
     return this.sales.createEstimate(user.organizationId, dto.customerId, dto.lines, dto.discount ?? 0);
   }
 
