@@ -2156,12 +2156,13 @@ type Estimate = {
 export function EstimatesPage() {
   const list = useList<Estimate>("estimates", "/estimates");
   const customers = useList<{ id: string; name: string; state?: string }>("customers", "/customers");
+  const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
   const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number }>("products", "/products");
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ customerId: "" });
+  const [form, setForm] = useState({ customerId: "", warehouseId: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
 
   const selectedCustomer = (customers.data ?? []).find((c) => c.id === form.customerId);
@@ -2174,6 +2175,7 @@ export function EstimatesPage() {
 
       return api.post("/estimates", {
         customerId: form.customerId,
+        warehouseId: form.warehouseId || undefined,
         lines: validLines.map((l) => ({
           productId: l.productId,
           quantity: l.quantity,
@@ -2195,6 +2197,7 @@ export function EstimatesPage() {
     mutationFn: async (estimate: Estimate) => {
       return api.post("/sales-orders", {
         customerId: estimate.customer?.id,
+        warehouseId: form.warehouseId || undefined,
         lines: (estimate.lines ?? []).map((l: any) => ({
           productId: l.productId,
           quantity: Number(l.quantity),
@@ -2269,14 +2272,32 @@ export function EstimatesPage() {
           </>
         }
       >
-        <div style={{ marginBottom: 16 }}>
+        <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
           <InputGroup label="Customer *">
-            <SearchableSelect
-              placeholder="Search and select customer..."
-              options={(customers.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            <select
+              className="input-field"
               value={form.customerId}
-              onChange={(val) => setForm({ ...form, customerId: val })}
-            />
+              onChange={(e) => setForm({ ...form, customerId: e.target.value })}
+              required
+            >
+              <option value="">Select customer…</option>
+              {(customers.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </InputGroup>
+
+          <InputGroup label="Dispatch Warehouse">
+            <select
+              className="input-field"
+              value={form.warehouseId}
+              onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
+            >
+              <option value="">Select warehouse (optional)…</option>
+              {(warehouses.data ?? []).map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
           </InputGroup>
         </div>
 

@@ -24,14 +24,17 @@ export class SalesService {
 
   async createEstimate(orgId: string, customerId: string, lines: CreateSalesOrderDto["lines"], discount = 0) {
     const priced = await this.priceLines(orgId, lines, "sell");
-    const totals = documentTotals(priced, discount, 0);
+    const { subtotal, tax, discount: disc, total } = documentTotals(priced, discount, 0);
     const number = await this.sequences.nextInTx(this.prisma, orgId, "EST", "EST");
     return this.prisma.estimate.create({
       data: {
         organizationId: orgId,
         number,
         customerId,
-        ...totals,
+        subtotal,
+        tax,
+        discount: disc,
+        total,
         lines: {
           create: priced.map((l: any) => ({
             productId: l.productId,
