@@ -2394,7 +2394,7 @@ export function LineItemBuilder({
                 borderRadius: 8,
                 padding: "12px 14px",
                 display: "grid",
-                gridTemplateColumns: "2.2fr 0.9fr 1.1fr 1.8fr 1.1fr auto",
+                gridTemplateColumns: "2.1fr 0.8fr 1.1fr 2.2fr 1.1fr auto",
                 gap: 10,
                 alignItems: "center",
               }}
@@ -2444,19 +2444,46 @@ export function LineItemBuilder({
               </div>
 
               <div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>Item Tax %</span>
-                <select
-                  className="input-field"
-                  style={{ fontSize: 13, padding: "6px 8px" }}
-                  value={line.taxRate}
-                  onChange={(e) => updateLine(idx, "taxRate", Number(e.target.value))}
-                >
-                  <option value={0}>0% Tax Exempt</option>
-                  <option value={5}>5% GST ({isTN ? "SGST 2.5% + CGST 2.5%" : "IGST 5%"})</option>
-                  <option value={12}>12% GST ({isTN ? "SGST 6% + CGST 6%" : "IGST 12%"})</option>
-                  <option value={18}>18% Standard GST ({isTN ? "SGST 9% + CGST 9%" : "IGST 18%"})</option>
-                  <option value={28}>28% Luxury GST ({isTN ? "SGST 14% + CGST 14%" : "IGST 28%"})</option>
-                </select>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>
+                  GST Tax % (Custom Editable)
+                </span>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div style={{ position: "relative", flex: 1 }}>
+                    <input
+                      type="number"
+                      className="input-field font-mono"
+                      style={{ fontSize: 13, padding: "6px 20px 6px 8px", width: "100%", fontWeight: 700 }}
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      placeholder="18"
+                      value={line.taxRate}
+                      onChange={(e) => updateLine(idx, "taxRate", Math.max(0, Number(e.target.value)))}
+                    />
+                    <span style={{ position: "absolute", right: 6, top: 7, fontSize: 12, fontWeight: 800, color: "var(--text-muted)" }}>%</span>
+                  </div>
+
+                  <select
+                    className="input-field"
+                    style={{ fontSize: 11, padding: "6px 4px", width: 85, color: "var(--text-secondary)" }}
+                    value={line.taxRate}
+                    onChange={(e) => updateLine(idx, "taxRate", Number(e.target.value))}
+                  >
+                    <option value={line.taxRate}>Preset...</option>
+                    <option value={0}>0%</option>
+                    <option value={5}>5%</option>
+                    <option value={12}>12%</option>
+                    <option value={18}>18%</option>
+                    <option value={28}>28%</option>
+                  </select>
+                </div>
+                {line.taxRate > 0 && (
+                  <div style={{ fontSize: 10, color: isTN ? "#1d4ed8" : "#92400e", marginTop: 3, fontWeight: 700 }}>
+                    {isTN
+                      ? `${(line.taxRate / 2).toFixed(1)}% SGST + ${(line.taxRate / 2).toFixed(1)}% CGST`
+                      : `${line.taxRate}% IGST`}
+                  </div>
+                )}
               </div>
 
               <div>
