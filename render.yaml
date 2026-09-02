@@ -1,0 +1,33 @@
+services:
+  # Backend NestJS API Service
+  - type: web
+    name: inventra-api
+    env: node
+    rootDir: apps/api
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma db push && node dist/src/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: onboarding@resend.dev
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+
+  # Frontend Vite React Static Site
+  - type: web
+    name: inventra-web
+    env: static
+    rootDir: apps/web
+    buildCommand: npm install && npm run build
+    staticPublishPath: apps/web/dist
