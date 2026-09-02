@@ -26,24 +26,66 @@ export class SalesService {
   async sendEstimateEmail(orgId: string, estimateId: string) {
     const estimate = await this.prisma.estimate.findFirst({
       where: { id: estimateId, organizationId: orgId },
-      include: { customer: true },
+      include: { customer: true, lines: { include: { product: true } } },
     });
     if (!estimate) throw new NotFoundException("Estimate not found");
     const customer = estimate.customer;
-    if (!customer?.email) throw new BadRequestException("Customer does not have a registered email address.");
+    if (!customer?.email) throw new BadRequestException(`Customer "${customer?.name ?? "Customer"}" does not have an email address.`);
 
-    const subject = `Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
+    const subject = `Official Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
+    const linesHtml = (estimate.lines ?? []).map((l: any, i: number) => `
+      <tr>
+        <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${i + 1}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 8px;"><strong>${l.product?.name ?? l.description ?? "Item"}</strong></td>
+        <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">${l.quantity}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">₹${Number(l.unitPrice).toFixed(2)}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${l.taxRate}%</td>
+        <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">₹${Number(l.amount).toFixed(2)}</td>
+      </tr>
+    `).join("");
+
     const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b;">
-        <h2>OSCAR AUTO FLUX - Official Price Quotation</h2>
-        <p>Dear <strong>${customer.name}</strong>,</p>
-        <p>Please review your requested price estimate <strong>${estimate.number}</strong>:</p>
-        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #cbd5e1;">
-          <p><strong>Estimate Number:</strong> ${estimate.number}</p>
-          <p><strong>Total Amount:</strong> ₹${Number(estimate.total).toLocaleString("en-IN")}</p>
-          <p><strong>Validity:</strong> Valid for 30 Days</p>
+      <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 10px; padding: 24px; color: #1e293b; background: #ffffff;">
+        <div style="border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 16px;">
+          <h2 style="margin: 0; color: #1e3a8a; font-size: 22px;">OSCAR AUTO FLUX</h2>
+          <div style="font-size: 12px; color: #64748b;">Manufacturers of Welding Consumables | ISO 9001:2015 Company</div>
         </div>
-        <p>Thank you for choosing OSCAR AUTO FLUX!</p>
+
+        <p style="font-size: 14px;">Dear <strong>${customer.name}</strong>,</p>
+        <p style="font-size: 13px; color: #475569;">Thank you for your interest! Below is your requested official price quotation <strong>${estimate.number}</strong>:</p>
+
+        <div style="background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 16px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Estimate Number: <strong>${estimate.number}</strong></span>
+            <span>Validity: <strong style="color: #16a34a;">Valid for 30 Days</strong></span>
+          </div>
+          <div>Date: <strong>${estimate.createdAt ? new Date(estimate.createdAt).toLocaleDateString("en-IN") : new Date().toLocaleDateString("en-IN")}</strong></div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 12px;">
+          <thead>
+            <tr style="background: #f1f5f9; text-align: left;">
+              <th style="border: 1px solid #cbd5e1; padding: 8px; width: 30px;">#</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px;">Item Description</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Qty</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Rate</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">Tax %</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${linesHtml}
+          </tbody>
+        </table>
+
+        <div style="background: #f0fdf4; padding: 14px; border-radius: 8px; border: 1px solid #bbf7d0; text-align: right; font-size: 16px; font-weight: bold; color: #15803d; margin-bottom: 16px;">
+          Total Quote Amount: ₹${Number(estimate.total).toLocaleString("en-IN")}
+        </div>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #64748b; line-height: 1.5;">
+          <strong>Bank Details for Advance Settlement:</strong><br />
+          Bank: INDIAN OVERSEAS BANK | A/C Name: OSCAR AUTO FLUX | A/C No: 186302000000680 | IFSC: IOBA0001863
+        </div>
       </div>
     `;
 

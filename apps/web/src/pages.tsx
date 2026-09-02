@@ -2171,6 +2171,9 @@ export function PrintEstimateModal({
   const tax = Number(estimate.tax || 0);
   const lines = estimate.lines ?? [];
 
+  const { toast } = useToast();
+  const [sendingEmail, setSendingEmail] = useState(false);
+
   const handlePrint = () => {
     window.print();
   };
@@ -2186,16 +2189,22 @@ export function PrintEstimateModal({
 
   const handleEmailShare = async () => {
     const email = customer.email || "";
+    if (!email) {
+      toast(`Customer "${customer.name || "Customer"}" does not have an email address specified.`, "error");
+      return;
+    }
+
+    setSendingEmail(true);
     try {
       if (estimate.id) {
         await api.post(`/estimates/${estimate.id}/send-email`);
+        toast(`Price Quotation (${estimate.number}) successfully emailed to ${email}!`);
       }
-    } catch (e) {
-      // ignore
+    } catch (err: any) {
+      toast(err.response?.data?.message ?? "Could not send email quotation.", "error");
+    } finally {
+      setSendingEmail(false);
     }
-    const subject = `Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
-    const body = `Dear ${customer.name || "Customer"},\n\nPlease find attached/below our official price quotation estimate ${estimate.number}.\n\nTotal Amount: ₹${total.toLocaleString("en-IN")}\n\nKindly review and confirm.\n\nBest Regards,\nOSCAR AUTO FLUX`;
-    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const stateStr = (customer?.state || "").toLowerCase();
@@ -2212,8 +2221,8 @@ export function PrintEstimateModal({
             <button type="button" className="btn btn-secondary" onClick={handleWhatsAppShare} style={{ background: "#16a34a", color: "#fff", border: "none" }}>
               💬 Share on WhatsApp
             </button>
-            <button type="button" className="btn btn-secondary" onClick={handleEmailShare}>
-              ✉️ Email Quotation
+            <button type="button" className="btn btn-secondary" disabled={sendingEmail} onClick={handleEmailShare}>
+              {sendingEmail ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "✉️ Email Quotation"}
             </button>
           </div>
 
