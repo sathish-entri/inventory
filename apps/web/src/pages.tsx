@@ -2606,7 +2606,7 @@ export function KanbanBoard<
 // ─────────────────────────────────────────────────────────
 // SALES ORDERS PAGE
 // ─────────────────────────────────────────────────────────
-type SalesOrder = { id: string; number: string; status: string; total: string; customer?: { name: string }; lines?: { productId: string; quantity: string }[] };
+type SalesOrder = { id: string; number: string; status: string; total: string; customer?: { name: string; state?: string }; lines?: { productId: string; quantity: string }[] };
 
 export function SalesOrdersPage() {
   const list = useList<SalesOrder>("so", "/sales-orders");
@@ -3556,7 +3556,7 @@ function InvoiceTimelineModal({ invoice, onClose }: { invoice: any; onClose: () 
 // ─────────────────────────────────────────────────────────
 // INVOICES PAGE
 // ─────────────────────────────────────────────────────────
-type Invoice = { id: string; number: string; status: string; total: string; amountPaid: string; dueDate?: string; customerId?: string; customer?: { id: string; name: string } };
+type Invoice = { id: string; number: string; status: string; total: string; amountPaid: string; dueDate?: string; customerId?: string; customer?: { id: string; name: string; state?: string } };
 
 export function InvoicesPage() {
   const list = useList<Invoice>("invs", "/invoices");
@@ -3605,6 +3605,22 @@ export function InvoicesPage() {
   const columns: Column<Invoice>[] = [
     { label: "Invoice #", render: (r) => <strong>{r.number}</strong> },
     { label: "Customer", render: (r) => r.customer?.name ?? "—" },
+    {
+      label: "GST Type",
+      render: (r) => {
+        const custState = (r.customer?.state || "").toLowerCase().trim();
+        const isTN = !custState || custState.includes("tamil") || custState.includes("tn") || custState.startsWith("33");
+        return (
+          <span style={{
+            background: isTN ? "#eff6ff" : "#fef3c7",
+            color: isTN ? "#1d4ed8" : "#92400e",
+            padding: "2px 7px", borderRadius: 6, fontSize: 11, fontWeight: 700
+          }}>
+            {isTN ? "SGST 9% + CGST 9%" : "IGST 18% (Inter-State)"}
+          </span>
+        );
+      },
+    },
     { label: "Status", render: (r) => <Badge status={r.status} /> },
     { label: "Due Date", render: (r) => r.dueDate ? new Date(r.dueDate).toLocaleDateString() : "—" },
     { label: "Total", align: "right", render: (r) => <strong>{money(Number(r.total))}</strong> },
@@ -3708,6 +3724,7 @@ export function InvoicesPage() {
                   <tr>
                     <th>Order #</th>
                     <th>Customer</th>
+                    <th>Applicable GST</th>
                     <th style={{ textAlign: "right" }}>Total Amount</th>
                     <th>Fulfillment Status</th>
                     <th style={{ textAlign: "right" }}>Action</th>
@@ -3716,10 +3733,22 @@ export function InvoicesPage() {
                 <tbody>
                   {readyToInvoice.map((o) => {
                     const isThisRowLoading = invoicingId === o.id;
+                    const custState = (o.customer?.state || "").toLowerCase().trim();
+                    const isTN = !custState || custState.includes("tamil") || custState.includes("tn") || custState.startsWith("33");
+
                     return (
                       <tr key={o.id}>
                         <td><strong>{o.number}</strong></td>
                         <td>{o.customer?.name ?? "—"}</td>
+                        <td>
+                          <span style={{
+                            background: isTN ? "#eff6ff" : "#fef3c7",
+                            color: isTN ? "#1d4ed8" : "#92400e",
+                            padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700
+                          }}>
+                            {isTN ? "SGST 9% + CGST 9%" : "IGST 18% (Inter-State)"}
+                          </span>
+                        </td>
                         <td style={{ textAlign: "right" }}><strong>{money(Number(o.total))}</strong></td>
                         <td><Badge status={o.status} /></td>
                         <td style={{ textAlign: "right" }}>
