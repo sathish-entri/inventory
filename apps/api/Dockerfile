@@ -16,4 +16,5 @@ ENV NODE_ENV=production
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma db push && node dist/apps/api/src/main.js"]
+RUN chmod +x start.sh
+CMD ["./start.sh"]
