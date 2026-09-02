@@ -1,13 +1,11 @@
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-COPY packages/shared ./packages/shared
-COPY apps/web ./apps/web
-RUN npm install --workspace=@inventra/shared --workspace=@inventra/web
-WORKDIR /app/apps/web
-RUN npm run build
+
+COPY . ./
+
+RUN npm install --include=dev
+RUN if [ -f "vite.config.ts" ]; then npm run build; else npm run build -w apps/web; fi
 
 FROM nginx:alpine
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html 2>/dev/null || COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80

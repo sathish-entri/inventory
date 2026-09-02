@@ -1,17 +1,15 @@
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-COPY packages/shared ./packages/shared
-COPY apps/api ./apps/api
-RUN npm install --workspace=@inventra/shared --workspace=@inventra/api
-WORKDIR /app/apps/api
-RUN npx prisma generate
-RUN npm run build
+
+COPY . ./
+
+RUN if [ -f "prisma/schema.prisma" ]; then npx prisma generate --schema=prisma/schema.prisma; else npx prisma generate --schema=apps/api/prisma/schema.prisma; fi
+RUN npm install --include=dev
+RUN if [ -f "tsconfig.build.json" ]; then npx tsc -p tsconfig.build.json; else npm run build -w apps/api; fi
 
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app /app
-WORKDIR /app/apps/api
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma db push && node dist/src/main.js"]
+CMD ["sh", "-c", "if [ -d 'prisma' ]; then npx prisma db push && node dist/src/main.js; else cd apps/api && npx prisma db push && node dist/src/main.js; fi"]
