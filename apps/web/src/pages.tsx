@@ -2155,14 +2155,16 @@ type Estimate = {
 
 export function EstimatesPage() {
   const list = useList<Estimate>("estimates", "/estimates");
-  const customers = useList<{ id: string; name: string }>("customers", "/customers");
+  const customers = useList<{ id: string; name: string; state?: string }>("customers", "/customers");
   const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number }>("products", "/products");
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ customerId: "" });
-  const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
+  const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
+
+  const selectedCustomer = (customers.data ?? []).find((c) => c.id === form.customerId);
 
   const create = useMutation({
     mutationFn: () => {
@@ -2183,7 +2185,7 @@ export function EstimatesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["estimates"] });
       setOpen(false);
-      setLines([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
+      setLines([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
       toast("Estimate quote created successfully!");
     },
     onError: (err: any) => toast(err.response?.data?.message ?? err.message ?? "Could not create estimate.", "error"),
@@ -2278,7 +2280,7 @@ export function EstimatesPage() {
           </InputGroup>
         </div>
 
-        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" />
+        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
       </Modal>
     </div>
   );
@@ -2300,14 +2302,19 @@ export function LineItemBuilder({
   onChange,
   products,
   mode = "selling",
+  customerState,
 }: {
   lines: LineItem[];
   onChange: (lines: LineItem[]) => void;
   products: { id: string; name: string; sellingPrice?: number; costPrice?: number; taxRate?: number }[];
   mode?: "selling" | "purchasing";
+  customerState?: string;
 }) {
+  const stateStr = (customerState || "").toLowerCase().trim();
+  const isTN = !stateStr || stateStr.includes("tamil") || stateStr.includes("tn") || stateStr.startsWith("33");
+
   const addLine = () => {
-    onChange([...lines, { productId: "", quantity: 1, unitPrice: 0, taxRate: 0, description: "" }]);
+    onChange([...lines, { productId: "", quantity: 1, unitPrice: 0, taxRate: 18, description: "" }]);
   };
 
   const removeLine = (index: number) => {
@@ -2323,7 +2330,7 @@ export function LineItemBuilder({
       if (prod) {
         const price = mode === "selling" ? Number(prod.sellingPrice ?? 0) : Number(prod.costPrice ?? 0);
         next[index].unitPrice = price;
-        next[index].taxRate = Number(prod.taxRate ?? 0);
+        next[index].taxRate = Number(prod.taxRate ?? 18);
       }
     }
     onChange(next);
@@ -2335,6 +2342,34 @@ export function LineItemBuilder({
 
   return (
     <div style={{ marginTop: 16 }}>
+      {/* ── Live GST Tax Jurisdiction & Breakdown Banner ── */}
+      <div style={{
+        padding: "10px 14px",
+        background: isTN ? "#eff6ff" : "#fef3c7",
+        border: `1px solid ${isTN ? "#bfdbfe" : "#fde68a"}`,
+        borderRadius: 8,
+        marginBottom: 12,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 8,
+        fontSize: 12,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 15 }}>{isTN ? "🏛️" : "🗺️"}</span>
+          <span>
+            <strong>GST Tax Jurisdiction:</strong> {customerState ? <span style={{ fontWeight: 700, textTransform: "capitalize" }}>{customerState}</span> : "Tamil Nadu (Default)"}
+            <span style={{ marginLeft: 6, color: "var(--text-muted)", fontSize: 11 }}>
+              ({isTN ? "Intra-State Sale" : "Inter-State Sale"})
+            </span>
+          </span>
+        </div>
+        <div style={{ fontWeight: 800, color: isTN ? "#1d4ed8" : "#92400e", background: isTN ? "#dbeafe" : "#fef08a", padding: "3px 10px", borderRadius: 20 }}>
+          {isTN ? "SGST (9%) + CGST (9%) = 18% GST" : "IGST (18% Static)"}
+        </div>
+      </div>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
           <Boxes size={16} color="var(--accent)" /> Multiple Items & Per-Item Tax Breakdown ({lines.length})
@@ -2359,7 +2394,7 @@ export function LineItemBuilder({
                 borderRadius: 8,
                 padding: "12px 14px",
                 display: "grid",
-                gridTemplateColumns: "2.5fr 1fr 1.2fr 1.3fr 1.2fr auto",
+                gridTemplateColumns: "2.2fr 0.9fr 1.1fr 1.8fr 1.1fr auto",
                 gap: 10,
                 alignItems: "center",
               }}
@@ -2395,7 +2430,7 @@ export function LineItemBuilder({
 
               <div>
                 <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>
-                  {mode === "selling" ? "Unit Price ($)" : "Unit Cost ($)"}
+                  {mode === "selling" ? "Unit Price (₹)" : "Unit Cost (₹)"}
                 </span>
                 <input
                   className="input-field"
@@ -2417,10 +2452,10 @@ export function LineItemBuilder({
                   onChange={(e) => updateLine(idx, "taxRate", Number(e.target.value))}
                 >
                   <option value={0}>0% Tax Exempt</option>
-                  <option value={5}>5% GST / VAT</option>
-                  <option value={12}>12% GST / VAT</option>
-                  <option value={18}>18% Standard GST</option>
-                  <option value={28}>28% Luxury GST</option>
+                  <option value={5}>5% GST ({isTN ? "SGST 2.5% + CGST 2.5%" : "IGST 5%"})</option>
+                  <option value={12}>12% GST ({isTN ? "SGST 6% + CGST 6%" : "IGST 12%"})</option>
+                  <option value={18}>18% Standard GST ({isTN ? "SGST 9% + CGST 9%" : "IGST 18%"})</option>
+                  <option value={28}>28% Luxury GST ({isTN ? "SGST 14% + CGST 14%" : "IGST 28%"})</option>
                 </select>
               </div>
 
@@ -2458,11 +2493,20 @@ export function LineItemBuilder({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
-        <div style={{ display: "flex", gap: 20, fontSize: 13 }}>
+        <div style={{ display: "flex", gap: 16, fontSize: 12, flexWrap: "wrap", alignItems: "center" }}>
           <span>Subtotal: <strong>{money(subtotal)}</strong></span>
-          <span>Tax: <strong style={{ color: "var(--accent)" }}>+{money(taxTotal)}</strong></span>
+          {isTN ? (
+            <>
+              <span>SGST (9%): <strong style={{ color: "var(--accent)" }}>+{money(taxTotal / 2)}</strong></span>
+              <span>CGST (9%): <strong style={{ color: "var(--accent)" }}>+{money(taxTotal / 2)}</strong></span>
+            </>
+          ) : (
+            <span>IGST (18%): <strong style={{ color: "#d97706" }}>+{money(taxTotal)}</strong></span>
+          )}
         </div>
         <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>
           Grand Total: <span style={{ color: "var(--success)" }}>{money(grandTotal)}</span>
@@ -2610,7 +2654,7 @@ type SalesOrder = { id: string; number: string; status: string; total: string; c
 
 export function SalesOrdersPage() {
   const list = useList<SalesOrder>("so", "/sales-orders");
-  const customers = useList<{ id: string; name: string }>("customers", "/customers");
+  const customers = useList<{ id: string; name: string; state?: string }>("customers", "/customers");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
   const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number }>("products", "/products");
   const qc = useQueryClient();
@@ -2619,7 +2663,9 @@ export function SalesOrdersPage() {
   const [view, setView] = useState<"table" | "kanban">("table");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ customerId: "", warehouseId: "" });
-  const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
+  const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
+
+  const selectedCustomer = (customers.data ?? []).find((c) => c.id === form.customerId);
 
   const create = useMutation({
     mutationFn: () => {
@@ -2797,7 +2843,7 @@ export function SalesOrdersPage() {
           </InputGroup>
         </div>
 
-        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" />
+        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
       </Modal>
     </div>
   );
