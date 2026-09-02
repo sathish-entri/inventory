@@ -4,7 +4,7 @@ services:
     name: inventra-api
     env: node
     buildCommand: npm install && npx prisma generate --schema=apps/api/prisma/schema.prisma && npm run build -w apps/api
-    startCommand: npx prisma db push --schema=apps/api/prisma/schema.prisma && node apps/api/dist/src/main.js
+    startCommand: npx prisma db push --schema=apps/api/prisma/schema.prisma && if [ -f "apps/api/dist/main.js" ]; then node apps/api/dist/main.js; else node apps/api/dist/src/main.js; fi
     envVars:
       - key: NODE_ENV
         value: production
