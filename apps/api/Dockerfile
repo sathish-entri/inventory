@@ -6,6 +6,7 @@ COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
 RUN npm install
+RUN npm run build -w packages/shared
 WORKDIR /app/apps/api
 RUN npx prisma generate
 RUN npm run build
