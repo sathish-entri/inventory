@@ -669,10 +669,43 @@ select.input-field { cursor: pointer; }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ── Auth pages ──────────────────────────────────────── */
-.auth-page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; background: #0f1e35; }
-.auth-panel-left { background: linear-gradient(135deg, #0f1e35 0%, #1a3a5c 100%); display: flex; flex-direction: column; justify-content: center; padding: 60px; color: #fff; }
-.auth-panel-right { background: #f0f4f8; display: flex; align-items: center; justify-content: center; padding: 40px; }
-.auth-card { background: var(--surface); border-radius: var(--radius-xl); box-shadow: 0 24px 60px rgba(0,0,0,0.16); padding: 40px; width: 100%; max-width: 420px; }
+.auth-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #0f1e35;
+}
+.auth-panel-left {
+  background: linear-gradient(135deg, #0f1e35 0%, #1a3a5c 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  color: #fff;
+}
+.auth-panel-right {
+  background: #f0f4f8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.auth-card {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.12);
+  padding: 40px;
+  width: 100%;
+  max-width: 440px;
+}
+.auth-mobile-header {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
 
 /* ── Spinner & Skeleton ──────────────────────────────── */
 .spinner { width: 18px; height: 18px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
@@ -784,6 +817,49 @@ select.input-field { cursor: pointer; }
   :root {
     --sidebar-w: 280px;
     --mobile-nav-h: 62px;
+  }
+
+  /* Auth Pages Mobile Layout */
+  .auth-page {
+    grid-template-columns: 1fr !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    background: #f0f4f8 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+  }
+
+  .auth-panel-left {
+    display: none !important;
+  }
+
+  .auth-panel-right {
+    flex: 1 !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    min-height: 100dvh !important;
+    padding: 24px 16px 40px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #f0f4f8 !important;
+    box-sizing: border-box !important;
+  }
+
+  .auth-card {
+    padding: 28px 20px 32px !important;
+    border-radius: 20px !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08) !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+  }
+
+  .auth-mobile-header {
+    display: flex !important;
   }
 
   /* Base Typography scaling for mobile readability */

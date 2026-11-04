@@ -143,6 +143,10 @@ export function LoginPage() {
       {/* Right form panel */}
       <div className="auth-panel-right">
         <div className="auth-card">
+          <div className="auth-mobile-header">
+            <Boxes size={32} color="#1565d8" />
+            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Inventra</span>
+          </div>
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Sign in</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 28, fontSize: 14 }}>
             Welcome back! Enter your credentials to continue.
@@ -230,6 +234,10 @@ export function RegisterPage() {
       </div>
       <div className="auth-panel-right">
         <div className="auth-card">
+          <div className="auth-mobile-header">
+            <Boxes size={32} color="#1565d8" />
+            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Inventra</span>
+          </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Create your organization</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: 13 }}>Fill in the details to get started.</p>
           <form onSubmit={(e) => void onSubmit(e)} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
