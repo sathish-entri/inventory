@@ -1,9 +1,10 @@
-import axios from "axios";
+import axios, { type InternalAxiosRequestConfig } from "axios";
 
 let apiBaseUrl = import.meta.env.VITE_API_URL;
 
-if (!apiBaseUrl || apiBaseUrl === "" || apiBaseUrl === "undefined" || !apiBaseUrl.startsWith("http")) {
-  apiBaseUrl = "https://inventory-e32g.onrender.com/api/v1";
+if (!apiBaseUrl || apiBaseUrl === "" || apiBaseUrl === "undefined") {
+  // In development, default to local Vite proxy; in production, fallback to production URL
+  apiBaseUrl = import.meta.env.DEV ? "/api/v1" : "https://inventory-e32g.onrender.com/api/v1";
 } else {
   if (apiBaseUrl.endsWith("/")) {
     apiBaseUrl = apiBaseUrl.slice(0, -1);
@@ -26,18 +27,35 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let refreshPromise: Promise<string> | null = null;
+
 api.interceptors.response.use(
   (r) => r,
-  async (error) => {
-    if (error.response?.status === 401 && !error.config?.url?.includes("/auth/")) {
+  async (error: any) => {
+    const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+    if (error.response?.status === 401 && originalRequest && !originalRequest.url?.includes("/auth/") && !originalRequest._retry) {
+      originalRequest._retry = true;
       try {
-        const { data } = await api.post("/auth/refresh", {});
-        localStorage.setItem("accessToken", data.accessToken);
-        error.config.headers.Authorization = `Bearer ${data.accessToken}`;
-        return api.request(error.config);
-      } catch {
+        if (!refreshPromise) {
+          refreshPromise = api
+            .post("/auth/refresh", {})
+            .then(({ data }: { data: any }) => {
+              localStorage.setItem("accessToken", data.accessToken);
+              return data.accessToken as string;
+            })
+            .finally(() => {
+              refreshPromise = null;
+            });
+        }
+        const newAccessToken = await refreshPromise;
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
+        return api.request(originalRequest);
+      } catch (refreshErr) {
         localStorage.removeItem("accessToken");
         window.location.href = "/login";
+        return Promise.reject(refreshErr);
       }
     }
     return Promise.reject(error);

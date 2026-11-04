@@ -846,3 +846,45 @@ select.input-field { cursor: pointer; }
   .metrics-grid { grid-template-columns: 1fr; }
   .page-header-actions .btn span { display: none; }
 }
+
+/* ── PWA Install Buttons ────────────────────────────── */
+.sidebar-install-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(91, 155, 248, 0.15);
+  border: 1px solid rgba(91, 155, 248, 0.35);
+  border-radius: 8px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.sidebar-install-btn:hover {
+  background: rgba(91, 155, 248, 0.25);
+  border-color: #5b9bf8;
+  color: #ffffff;
+}
+
+.mobile-install-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(91, 155, 248, 0.2);
+  border: 1px solid rgba(91, 155, 248, 0.4);
+  border-radius: 6px;
+  color: #93c5fd;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-install-btn:hover {
+  background: rgba(91, 155, 248, 0.3);
+  color: #ffffff;
+}

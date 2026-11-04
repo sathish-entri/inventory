@@ -12,9 +12,15 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post("register")
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const tokens = await this.auth.register(dto);
-    console.log("Entered in regiter page")
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const tokens = await this.auth.register(dto, {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     this.setRefreshCookie(res, tokens.refreshToken);
     return tokens;
   }
@@ -34,30 +40,37 @@ export class AuthController {
   }
 
   @Post("refresh")
-  async refresh(@Body() dto: RefreshDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const token = dto.refreshToken ?? (req.cookies as Record<string, string> | undefined)?.refreshToken;
-    const tokens = await this.auth.refresh(token ?? "");
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const cookies = (req as any).cookies as Record<string, string> | undefined;
+    const token = dto.refreshToken ?? cookies?.refreshToken;
+    const tokens = await this.auth.refresh(token ?? "", {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     this.setRefreshCookie(res, tokens.refreshToken);
     return tokens;
   }
 
   @Post("logout")
-  @UseGuards(AuthGuard("jwt"))
-  @ApiBearerAuth()
   async logout(
-    @CurrentUser() user: AuthUser,
     @Body() dto: RefreshDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = dto.refreshToken ?? (req.cookies as Record<string, string> | undefined)?.refreshToken;
-    res.clearCookie("refreshToken");
-    return this.auth.logout(token, user.id);
+    const cookies = (req as any).cookies as Record<string, string> | undefined;
+    const token = dto.refreshToken ?? cookies?.refreshToken;
+    const user = (req as any).user as AuthUser | undefined;
+    this.clearRefreshCookie(res);
+    return this.auth.logout(token, user?.id);
   }
 
   @Post("forgot-password")
   forgot(@Body() dto: ForgotPasswordDto) {
-    return this.auth.forgotPassword(dto.email);
+    return this.auth.forgotPassword(dto.email, dto.organizationSlug);
   }
 
   @Post("reset-password")
@@ -82,7 +95,18 @@ export class AuthController {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.COOKIE_SECURE === "true",
+      domain: process.env.COOKIE_DOMAIN || undefined,
       maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+  }
+
+  private clearRefreshCookie(res: Response) {
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.COOKIE_SECURE === "true",
+      domain: process.env.COOKIE_DOMAIN || undefined,
       path: "/",
     });
   }

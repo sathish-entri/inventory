@@ -105,8 +105,9 @@ export function LoginPage() {
     try {
       await login(email, password);
       nav("/");
-    } catch {
-      setError("Invalid email or password. Please try again.");
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || "Invalid email or password. Please try again.";
+      setError(Array.isArray(msg) ? msg.join(", ") : msg);
     } finally {
       setLoading(false);
     }
@@ -198,7 +199,8 @@ export function RegisterPage() {
       await register(form);
       nav("/");
     } catch (err: any) {
-      setError(err.response?.data?.message ?? err.message ?? "Could not create organization account.");
+      const msg = err.response?.data?.message ?? err.message ?? "Could not create organization account.";
+      setError(Array.isArray(msg) ? msg.join(", ") : msg);
     } finally {
       setLoading(false);
     }
@@ -4383,7 +4385,7 @@ export function PaymentsPage() {
 // ─────────────────────────────────────────────────────────
 // PURCHASE ORDERS PAGE
 // ─────────────────────────────────────────────────────────
-type PurchaseOrder = { id: string; number: string; status: string; total: string; vendor?: { name: string }; lines?: { productId: string; quantity: string }[] };
+type PurchaseOrder = { id: string; number: string; status: string; total: string; vendor?: { name: string }; lines?: { productId: string; quantity: string; receivedQty?: number | string }[] };
 
 export function PurchaseOrdersPage() {
   const list = useList<PurchaseOrder>("po", "/purchase-orders");
@@ -4425,7 +4427,15 @@ export function PurchaseOrdersPage() {
   });
 
   const receive = useMutation({
-    mutationFn: (row: PurchaseOrder) => api.post(`/purchase-orders/${row.id}/receive`, { lines: (row.lines ?? []).map((l) => ({ productId: l.productId, quantity: Number(l.quantity) })) }),
+    mutationFn: (row: PurchaseOrder) => {
+      const remainingLines = (row.lines ?? [])
+        .map((l) => ({
+          productId: l.productId,
+          quantity: Math.max(0, Number(l.quantity) - Number(l.receivedQty ?? 0)),
+        }))
+        .filter((l) => l.quantity > 0);
+      return api.post(`/purchase-orders/${row.id}/receive`, { lines: remainingLines });
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["po"] }); qc.invalidateQueries({ queryKey: ["inv"] }); toast("Stock received & inventory updated"); },
     onError: (err: any) => toast(err.response?.data?.message ?? "Could not receive stock.", "error"),
   });
@@ -4437,11 +4447,14 @@ export function PurchaseOrdersPage() {
     { label: "Total", align: "right", render: (r) => <strong>{money(Number(r.total))}</strong> },
     {
       label: "Actions", align: "right",
-      render: (r) => (r.status === "ISSUED" || r.status === "OPEN" || r.status === "DRAFT") ? (
-        <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); receive.mutate(r); }} disabled={receive.isPending}>
-          <Download size={12} /> Receive Stock
-        </button>
-      ) : null,
+      render: (r) => {
+        const hasPendingStock = (r.lines ?? []).some((l) => Number(l.quantity) > Number(l.receivedQty ?? 0));
+        return (hasPendingStock && r.status !== "RECEIVED" && r.status !== "CANCELLED" && r.status !== "BILLED") ? (
+          <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); receive.mutate(r); }} disabled={receive.isPending}>
+            <Download size={12} /> Receive Stock
+          </button>
+        ) : null;
+      },
     },
   ];
 

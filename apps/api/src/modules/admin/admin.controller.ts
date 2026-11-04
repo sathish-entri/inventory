@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import * as bcrypt from "bcryptjs";
@@ -50,22 +61,54 @@ export class AdminController {
   @Post("users")
   @RequirePermissions("user:create")
   async invite(@CurrentUser() user: AuthUser, @Body() dto: InviteUserDto) {
-    const role = await this.prisma.role.findFirst({
-      where: { organizationId: user.organizationId, name: dto.roleName },
-    });
-    const created = await this.prisma.user.create({
-      data: {
-        organizationId: user.organizationId,
-        email: dto.email.toLowerCase(),
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        passwordHash: await bcrypt.hash(dto.password, 12),
-      },
-    });
-    if (role) {
-      await this.prisma.userRole.create({ data: { userId: created.id, roleId: role.id } });
+    const roleName = dto.roleName?.trim();
+    if (!roleName) {
+      throw new BadRequestException("Role name is required");
     }
-    const { passwordHash: _, ...safe } = created;
+
+    const permissions = user.permissions || [];
+    if (roleName.toLowerCase() === "admin" && !permissions.includes("role:manage")) {
+      throw new ForbiddenException("Privilege restriction: Assigning the Admin role requires 'role:manage' permission.");
+    }
+
+    const role = await this.prisma.role.findFirst({
+      where: { organizationId: user.organizationId, name: roleName },
+    });
+    if (!role) {
+      throw new BadRequestException(`Role "${roleName}" does not exist in your organization.`);
+    }
+
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const existing = await this.prisma.user.findFirst({
+      where: { organizationId: user.organizationId, email: normalizedEmail },
+    });
+    if (existing) {
+      throw new ConflictException(`A user with email "${normalizedEmail}" already exists in your organization.`);
+    }
+
+    const rounds = Number(process.env.BCRYPT_ROUNDS || 10);
+    const passwordHash = await bcrypt.hash(dto.password, rounds);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          organizationId: user.organizationId,
+          email: normalizedEmail,
+          firstName: dto.firstName.trim(),
+          lastName: dto.lastName.trim(),
+          passwordHash,
+        },
+      });
+
+      await tx.userRole.create({
+        data: { userId: newUser.id, roleId: role.id },
+      });
+
+      return newUser;
+    });
+
+    const safe: Record<string, any> = { ...created };
+    delete safe.passwordHash;
     return safe;
   }
 
@@ -117,7 +160,7 @@ export class AdminController {
   @RequirePermissions("integration:manage")
   upsertIntegration(
     @CurrentUser() user: AuthUser,
-    @Body() body: { provider: string; type: string; config: object; isEnabled: boolean },
+    @Body() body: { provider: string; type: string; config: any; isEnabled: boolean },
   ) {
     return this.prisma.integrationConfig.upsert({
       where: {

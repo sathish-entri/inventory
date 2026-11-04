@@ -1,10 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AnalyticsService } from "../analytics/analytics.service";
 import { availableQuantity } from "../inventory/inventory.math";
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   async dashboard(organizationId: string, warehouseId?: string) {
     const stockWhere: any = { organizationId };
@@ -12,6 +16,85 @@ export class ReportsService {
 
     const soWhere: any = { organizationId, status: { not: "CANCELLED" } };
 
+    // ── Try pre-computed snapshot first (fast path) ──────────────────────────
+    // Only use snapshot when no warehouse filter is applied (snapshot is org-wide)
+    if (!warehouseId) {
+      const snapshot = await this.analytics.getLatestSnapshot(organizationId);
+      if (snapshot) {
+        // Merge with always-live UI data (recent orders, notifications, etc.)
+        const [recentPayments, recentOrders, notifications, warehouses] = await Promise.all([
+          this.prisma.payment.findMany({
+            where: { organizationId },
+            orderBy: { createdAt: "desc" },
+            take: 8,
+            include: { customer: true },
+          }),
+          this.prisma.salesOrder.findMany({
+            where: { organizationId },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            include: { customer: true },
+          }),
+          this.prisma.notification.findMany({
+            where: { organizationId },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          }),
+          this.prisma.warehouse.findMany({
+            where: { organizationId },
+            select: { id: true, name: true },
+          }),
+        ]);
+
+        const salesTrend = recentOrders.map((o: any) => ({
+          name: o.number,
+          total: Number(o.total),
+          customer: o.customer?.name ?? "—",
+          date: new Date(o.createdAt).toLocaleDateString("en-IN"),
+          status: o.status,
+        }));
+        const recentPaymentsFormatted = recentPayments.map((p: any) => ({
+          customer: p.customer?.name ?? "—",
+          amount: Number(p.amount),
+          method: p.method,
+          date: new Date(p.createdAt).toLocaleDateString("en-IN"),
+        }));
+
+        const snap = snapshot as any;
+        return {
+          // From snapshot (pre-computed, fast)
+          totalSales: Number(snap.totalSales ?? 0),
+          totalPurchases: Number(snap.totalPurchases ?? 0),
+          receivables: Number(snap.receivables ?? 0),
+          payables: Number(snap.payables ?? 0),
+          totalCollected: Number(snap.totalCollected ?? 0),
+          totalBillsPaid: Number(snap.totalBillsPaid ?? 0),
+          inventoryValue: Number(snap.inventoryValue ?? 0),
+          totalStockUnits: Number(snap.totalStockUnits ?? 0),
+          lowStock: Number(snap.lowStockCount ?? 0),
+          lowStockItems: [],
+          pendingOrders: Number(snap.pendingOrderCount ?? 0),
+          confirmedOrders: Number(snap.pendingOrderCount ?? 0),
+          totalInvoices: Number(snap.totalInvoices ?? 0),
+          unpaidInvoices: Number(snap.unpaidInvoices ?? 0),
+          overdueInvoices: Number(snap.overdueInvoices ?? 0),
+          totalBills: 0,
+          unpaidBills: 0,
+          topItems: Array.isArray(snap.topProducts) ? snap.topProducts : [],
+          // Always live
+          salesTrend,
+          recentPayments: recentPaymentsFormatted,
+          notifications,
+          warehouses,
+          warehouseId: null,
+          warehouseName: null,
+          _fromSnapshot: true,
+          _snapshotAge: Math.floor((Date.now() - new Date(snap.computedAt).getTime()) / 60000) + "m",
+        };
+      }
+    }
+
+    // ── Live path (no snapshot, or warehouse filter) ───────────────────────
     const [
       sales,
       purchases,
@@ -24,8 +107,6 @@ export class ReportsService {
       recentPayments,
       recentOrders,
       notifications,
-      paidInvoices,
-      paidBills,
       topSalesLines,
       warehouses,
     ] = await Promise.all([
@@ -54,8 +135,6 @@ export class ReportsService {
         orderBy: { createdAt: "desc" },
         take: 10,
       }),
-      this.prisma.invoice.findMany({ where: { organizationId, status: "PAID" } }),
-      this.prisma.bill.findMany({ where: { organizationId, status: "PAID" } }),
       this.prisma.salesOrderLine.groupBy({
         by: ["productId"],
         where: { salesOrder: { organizationId, status: { not: "CANCELLED" } } },
@@ -68,8 +147,8 @@ export class ReportsService {
 
     const receivables = invoices.reduce((s: number, i: any) => s + Math.max(Number(i.total) - Number(i.amountPaid), 0), 0);
     const payables = bills.reduce((s: number, b: any) => s + Math.max(Number(b.total) - Number(b.amountPaid), 0), 0);
-    const totalCollected = paidInvoices.reduce((s: number, i: any) => s + Number(i.amountPaid), 0);
-    const totalBillsPaid = paidBills.reduce((s: number, b: any) => s + Number(b.amountPaid), 0);
+    const totalCollected = invoices.reduce((s: number, i: any) => s + Number(i.amountPaid ?? 0), 0);
+    const totalBillsPaid = bills.reduce((s: number, b: any) => s + Number(b.amountPaid ?? 0), 0);
 
     const inventoryValue = stocks.reduce(
       (s: number, st: any) => s + Number(st.quantity) * Number(st.product?.costPrice ?? 0),
@@ -92,7 +171,7 @@ export class ReportsService {
       qty: Number(l._sum.quantity ?? 0),
     }));
 
-    // Sales trend last 7 orders
+    // Sales trend last 10 orders
     const salesTrend = recentOrders.map((o: any) => ({
       name: o.number,
       total: Number(o.total),
@@ -108,6 +187,9 @@ export class ReportsService {
       method: p.method,
       date: new Date(p.createdAt).toLocaleDateString("en-IN"),
     }));
+
+    // Async: kick off snapshot save in background (do not await — keeps response fast)
+    this.analytics.computeAndSave(organizationId).catch(() => void 0);
 
     return {
       // Core financials
@@ -147,6 +229,7 @@ export class ReportsService {
       // Warehouse info
       warehouseId: warehouseId ?? null,
       warehouseName: warehouseId ? warehouses.find((w: any) => w.id === warehouseId)?.name ?? null : null,
+      _fromSnapshot: false,
     };
   }
 

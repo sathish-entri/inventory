@@ -13,7 +13,7 @@ export interface SessionUser {
 interface AuthCtx {
   user: SessionUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, organizationSlug?: string) => Promise<void>;
   register: (payload: {
     organizationName: string;
     email: string;
@@ -51,8 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void loadMe();
   }, []);
 
-  async function login(email: string, password: string) {
-    const { data } = await api.post("/auth/login", { email, password });
+  async function login(email: string, password: string, organizationSlug?: string) {
+    const { data } = await api.post("/auth/login", {
+      email,
+      password,
+      ...(organizationSlug ? { organizationSlug } : {}),
+    });
     localStorage.setItem("accessToken", data.accessToken);
     await loadMe();
   }
@@ -70,9 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    await api.post("/auth/logout", {});
-    localStorage.removeItem("accessToken");
-    setUser(null);
+    try {
+      await api.post("/auth/logout", {});
+    } catch {
+      // Ignore network errors or expired sessions on logout
+    } finally {
+      localStorage.removeItem("accessToken");
+      setUser(null);
+    }
   }
 
   return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;

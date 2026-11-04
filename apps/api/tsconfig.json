@@ -20,5 +20,6 @@
       "@inventra/shared": ["../../packages/shared/src/index.ts"]
     }
   },
-  "include": ["src", "prisma", "test"]
+  "include": ["src", "prisma", "test"],
+  "exclude": ["node_modules", "dist"]
 }

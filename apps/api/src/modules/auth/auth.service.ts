@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -13,20 +14,27 @@ import { EMAIL_PROVIDER, EmailProvider } from "../integrations/providers";
 import { Inject } from "@nestjs/common";
 import { LoginDto, RegisterDto } from "./dto";
 
+const DUMMY_HASH = "$2a$10$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN";
+const GRACE_PERIOD_MS = 15000; // 15s grace window for concurrent SPA refresh calls
+
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
 function slugify(name: string) {
-  return name
+  const slug = (name || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 40);
+  return slug || "org";
 }
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private permissionsEnsured = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -34,35 +42,48 @@ export class AuthService {
     @Inject(EMAIL_PROVIDER) private readonly email: EmailProvider,
   ) {}
 
-  async register(dto: RegisterDto) {
-    const rounds = Number(this.config.get("BCRYPT_ROUNDS", 12));
+  async register(dto: RegisterDto, meta?: { ip?: string; userAgent?: string }) {
+    const rounds = Number(this.config.get("BCRYPT_ROUNDS", 10));
     const passwordHash = await bcrypt.hash(dto.password, rounds);
-    let slug = slugify(dto.organizationName);
-    const clash = await this.prisma.organization.findUnique({ where: { slug } });
-    if (clash) slug = `${slug}-${randomBytes(2).toString("hex")}`;
+    const normalizedEmail = dto.email.toLowerCase().trim();
+
+    const baseSlug = slugify(dto.organizationName);
+    let slug = baseSlug;
+    let attempts = 0;
+    while (await this.prisma.organization.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${randomBytes(2).toString("hex")}`;
+      if (++attempts > 5) {
+        slug = `${baseSlug}-${randomBytes(4).toString("hex")}`;
+        break;
+      }
+    }
 
     const result = await this.prisma.$transaction(
       async (tx: any) => {
         const organization = await tx.organization.create({
-          data: { name: dto.organizationName, slug },
+          data: { name: dto.organizationName.trim(), slug },
         });
+
         await this.ensurePermissions(tx);
         const roles = await this.seedRoles(tx, organization.id);
+
         const user = await tx.user.create({
           data: {
             organizationId: organization.id,
-            email: dto.email.toLowerCase(),
+            email: normalizedEmail,
             passwordHash,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
+            firstName: dto.firstName.trim(),
+            lastName: dto.lastName.trim(),
           },
         });
+
         const admin = roles.find((r: any) => r.name === "Admin");
         if (admin) {
           await tx.userRole.create({
             data: { userId: user.id, roleId: admin.id },
           });
         }
+
         return { user, organization };
       },
       { timeout: 60000 },
@@ -73,67 +94,131 @@ export class AuthService {
       data: {
         userId: result.user.id,
         tokenHash: sha256(`verify:${verifyToken}`),
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24 hours
       },
     });
-    await this.email.send(
-      dto.email,
-      "Verify your Inventra account",
-      `<p>Verification token: ${verifyToken}</p>`,
-    );
 
-    return this.issueTokens(result.user.id, result.organization.id, dto.email.toLowerCase());
+    try {
+      await this.email.send(
+        normalizedEmail,
+        "Verify your Inventra account",
+        `<p>Welcome to Inventra! Your verification token is: <strong>${verifyToken}</strong></p>`,
+      );
+    } catch (err: any) {
+      this.logger.warn(`Failed to dispatch verification email to ${normalizedEmail}: ${err.message}`);
+    }
+
+    return this.issueTokens(result.user.id, result.organization.id, normalizedEmail, meta);
   }
 
-  async login(dto: LoginDto, meta: { ip?: string; userAgent?: string }) {
-    const email = dto.email.toLowerCase();
+  async login(dto: LoginDto, meta?: { ip?: string; userAgent?: string }) {
+    const email = dto.email.toLowerCase().trim();
     const users = await this.prisma.user.findMany({
       where: {
         email,
-        ...(dto.organizationSlug
-          ? { organization: { slug: dto.organizationSlug } }
-          : {}),
+        ...(dto.organizationSlug ? { organization: { slug: dto.organizationSlug.toLowerCase().trim() } } : {}),
       },
       include: { organization: true },
     });
-    if (users.length !== 1) {
-      throw new UnauthorizedException("Invalid credentials");
+
+    // Timing mitigation: run dummy compare if no user exists
+    if (users.length === 0) {
+      await bcrypt.compare(dto.password, DUMMY_HASH);
+      throw new UnauthorizedException("Invalid credentials.");
     }
+
+    if (users.length > 1) {
+      if (!dto.organizationSlug) {
+        throw new BadRequestException(
+          "Multiple accounts found for this email. Please provide your organization slug to sign in.",
+        );
+      }
+      throw new UnauthorizedException("Invalid credentials..");
+    }
+
     const user = users[0];
-    if (!user.isActive) throw new UnauthorizedException("Account disabled");
-    const ok = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException("Invalid credentials");
+    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordMatches) {
+      throw new UnauthorizedException("Invalid credentials...");
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException("Account disabled. Please contact your administrator.");
+    }
+
     return this.issueTokens(user.id, user.organizationId, user.email, meta);
   }
 
-  async refresh(refreshToken: string) {
-    const tokenHash = sha256(refreshToken);
+  async refresh(refreshToken: string, meta?: { ip?: string; userAgent?: string }) {
+    if (!refreshToken || !refreshToken.trim()) {
+      throw new UnauthorizedException("Refresh token is required");
+    }
+
+    const tokenHash = sha256(refreshToken.trim());
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
       include: { user: true },
     });
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+
+    if (!stored) {
       throw new UnauthorizedException("Invalid refresh token");
     }
+
+    if (stored.expiresAt < new Date()) {
+      throw new UnauthorizedException("Refresh token expired");
+    }
+
+    if (!stored.user || !stored.user.isActive) {
+      throw new UnauthorizedException("Account disabled");
+    }
+
+    // Reuse detection and grace period logic (RFC 6819)
+    if (stored.revokedAt) {
+      const elapsed = Date.now() - stored.revokedAt.getTime();
+      if (elapsed <= GRACE_PERIOD_MS) {
+        // Safe concurrent request within grace window: issue a fresh session
+        return this.issueTokens(stored.userId, stored.organizationId, stored.user.email, meta);
+      }
+
+      // Token reuse detected outside grace window: Potential token theft!
+      // Invalidate all active sessions for this user
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      this.logger.warn(`Refresh token reuse detected for userId=${stored.userId}. All sessions revoked.`);
+      throw new UnauthorizedException("Security violation: Refresh token reuse detected. All sessions terminated.");
+    }
+
+    // Revoke current token immediately
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
       data: { revokedAt: new Date() },
     });
-    const tokens = await this.issueTokens(stored.userId, stored.organizationId, stored.user.email);
+
+    const tokens = await this.issueTokens(stored.userId, stored.organizationId, stored.user.email, meta);
+
+    // Link lineage
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
-      data: { replacedById: "rotated" },
+      data: { replacedById: tokens.tokenId },
     });
-    return tokens;
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenType: tokens.tokenType,
+    };
   }
 
-  async logout(refreshToken: string | undefined, userId: string) {
-    if (refreshToken) {
+  async logout(refreshToken: string | undefined, userId?: string) {
+    if (refreshToken && refreshToken.trim()) {
       await this.prisma.refreshToken.updateMany({
-        where: { tokenHash: sha256(refreshToken), userId },
+        where: { tokenHash: sha256(refreshToken.trim()), revokedAt: null },
         data: { revokedAt: new Date() },
       });
-    } else {
+    }
+    if (userId) {
       await this.prisma.refreshToken.updateMany({
         where: { userId, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -142,33 +227,64 @@ export class AuthService {
     return { success: true };
   }
 
-  async forgotPassword(email: string) {
-    const user = await this.prisma.user.findFirst({ where: { email: email.toLowerCase() } });
-    if (!user) return { success: true };
-    const token = randomBytes(32).toString("hex");
-    await this.prisma.passwordReset.create({
-      data: {
-        userId: user.id,
-        tokenHash: sha256(token),
-        expiresAt: new Date(Date.now() + 1000 * 60 * 30),
+  async forgotPassword(email: string, organizationSlug?: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const users = await this.prisma.user.findMany({
+      where: {
+        email: normalizedEmail,
+        ...(organizationSlug ? { organization: { slug: organizationSlug.toLowerCase().trim() } } : {}),
       },
     });
-    await this.email.send(email, "Reset your password", `<p>Reset token: ${token}</p>`);
+
+    if (users.length === 0) return { success: true };
+
+    for (const user of users) {
+      // Invalidate existing unused reset tokens for this user
+      await this.prisma.passwordReset.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+
+      const token = randomBytes(32).toString("hex");
+      await this.prisma.passwordReset.create({
+        data: {
+          userId: user.id,
+          tokenHash: sha256(token),
+          expiresAt: new Date(Date.now() + 1000 * 60 * 30), // 30 minutes
+        },
+      });
+
+      try {
+        await this.email.send(
+          normalizedEmail,
+          "Reset your password",
+          `<p>You requested a password reset. Your reset token is: <strong>${token}</strong> (expires in 30 minutes).</p>`,
+        );
+      } catch (err: any) {
+        this.logger.warn(`Failed to dispatch password reset email: ${err.message}`);
+      }
+    }
+
     return { success: true };
   }
 
   async resetPassword(token: string, password: string) {
+    const trimmedToken = token.trim();
     const row = await this.prisma.passwordReset.findUnique({
-      where: { tokenHash: sha256(token) },
+      where: { tokenHash: sha256(trimmedToken) },
     });
+
     if (!row || row.usedAt || row.expiresAt < new Date()) {
-      throw new BadRequestException("Invalid or expired token");
+      throw new BadRequestException("Invalid or expired reset token");
     }
-    const rounds = Number(this.config.get("BCRYPT_ROUNDS", 12));
+
+    const rounds = Number(this.config.get("BCRYPT_ROUNDS", 10));
+    const newPasswordHash = await bcrypt.hash(password, rounds);
+
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: row.userId },
-        data: { passwordHash: await bcrypt.hash(password, rounds) },
+        data: { passwordHash: newPasswordHash },
       }),
       this.prisma.passwordReset.update({
         where: { id: row.id },
@@ -179,23 +295,31 @@ export class AuthService {
         data: { revokedAt: new Date() },
       }),
     ]);
+
     return { success: true };
   }
 
   async verifyEmail(token: string) {
+    const trimmedToken = token.trim();
     const row = await this.prisma.passwordReset.findUnique({
-      where: { tokenHash: sha256(`verify:${token}`) },
+      where: { tokenHash: sha256(`verify:${trimmedToken}`) },
     });
+
     if (!row || row.usedAt || row.expiresAt < new Date()) {
       throw new BadRequestException("Invalid or expired verification token");
     }
+
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: row.userId },
         data: { emailVerifiedAt: new Date() },
       }),
-      this.prisma.passwordReset.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
+      this.prisma.passwordReset.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() },
+      }),
     ]);
+
     return { success: true };
   }
 
@@ -207,10 +331,16 @@ export class AuthService {
         roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
       },
     });
-    const { passwordHash: _, ...safe } = user;
+
+    const safe: Record<string, any> = { ...user };
+    delete safe.passwordHash;
+    const permissions = [
+      ...new Set(user.roles.flatMap((ur: any) => ur.role.permissions.map((p: any) => p.permission.key))),
+    ];
+
     return {
       ...safe,
-      permissions: user.roles.flatMap((ur: any) => ur.role.permissions.map((p: any) => p.permission.key)),
+      permissions,
     };
   }
 
@@ -228,9 +358,10 @@ export class AuthService {
         expiresIn: this.config.get("JWT_ACCESS_EXPIRES_IN", "15m"),
       },
     );
+
     const refreshRaw = randomBytes(48).toString("hex");
     const days = 7;
-    await this.prisma.refreshToken.create({
+    const storedToken = await this.prisma.refreshToken.create({
       data: {
         organizationId,
         userId,
@@ -240,7 +371,13 @@ export class AuthService {
         userAgent: meta?.userAgent,
       },
     });
-    return { accessToken, refreshToken: refreshRaw, tokenType: "Bearer" as const };
+
+    return {
+      accessToken,
+      refreshToken: refreshRaw,
+      tokenType: "Bearer" as const,
+      tokenId: storedToken.id,
+    };
   }
 
   private async loadPermissions(userId: string): Promise<string[]> {
@@ -252,6 +389,7 @@ export class AuthService {
   }
 
   private async ensurePermissions(tx: any) {
+    if (this.permissionsEnsured) return;
     const existing = await tx.permission.findMany({ select: { key: true } });
     const existingKeys = new Set(existing.map((p: any) => p.key));
     const missing = PERMISSIONS.filter((key) => !existingKeys.has(key));
@@ -260,6 +398,7 @@ export class AuthService {
         data: missing.map((key) => ({ key })),
       });
     }
+    this.permissionsEnsured = true;
   }
 
   async seedRoles(tx: any, organizationId: string) {

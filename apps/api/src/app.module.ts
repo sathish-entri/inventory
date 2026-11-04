@@ -4,6 +4,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { CatalogService } from "./modules/catalog/catalog.service";
 import { CatalogController } from "./modules/catalog/catalog.controller";
 import { InventoryService } from "./modules/inventory/inventory.service";
@@ -35,6 +36,7 @@ import {
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     PrismaModule,
     AuthModule,
+    AnalyticsModule,
   ],
   controllers: [
     HealthController,

@@ -137,6 +137,7 @@ model Organization {
   files                  FileObject[]
   integrations           IntegrationConfig[]
   numberSequences        NumberSequence[]
+  analyticsSnapshots     AnalyticsSnapshot[]
 }
 
 model User {
@@ -1042,4 +1043,51 @@ model IntegrationConfig {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, provider])
+}
+
+/// Pre-computed analytics snapshot (refreshed by daily cron job)
+model AnalyticsSnapshot {
+  id             String   @id @default(cuid()) @map("_id")
+  organizationId String
+  snapshotDate   DateTime /// UTC midnight of the day this snapshot covers
+  period         String   /// e.g. "2026-11" for monthly, "2026-11-03" for daily
+  granularity    String   @default("daily") /// "daily" | "monthly"
+
+  // Financial KPIs
+  totalSales       Float @default(0)
+  totalPurchases   Float @default(0)
+  totalCollected   Float @default(0)
+  totalBillsPaid   Float @default(0)
+  receivables      Float @default(0)
+  payables         Float @default(0)
+
+  // Inventory KPIs
+  inventoryValue   Float @default(0)
+  totalStockUnits  Float @default(0)
+  lowStockCount    Int   @default(0)
+
+  // Order KPIs
+  pendingOrderCount    Int @default(0)
+  fulfilledOrderCount  Int @default(0)
+  cancelledOrderCount  Int @default(0)
+
+  // Invoice KPIs
+  totalInvoices    Int   @default(0)
+  unpaidInvoices   Int   @default(0)
+  overdueInvoices  Int   @default(0)
+
+  // Rich JSON payloads for charts
+  topProducts      Json? /// [{name, revenue, qty, margin}]
+  salesTrend       Json? /// [{date, total, orders}] last 30 days
+  salesByCustomer  Json? /// [{customer, total}]
+  cashFlow         Json? /// [{date, collected, paid}]
+  inventorySummary Json? /// [{sku, name, qty, value}]
+
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, period, granularity])
+  @@index([organizationId, snapshotDate])
 }

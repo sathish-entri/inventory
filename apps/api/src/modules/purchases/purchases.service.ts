@@ -99,7 +99,17 @@ export class PurchasesService {
 
   async receive(orgId: string, purchaseOrderId: string, dto: ReceiveDto, userId: string) {
     const po = await this.getPO(orgId, purchaseOrderId);
-    if (po.status === "CANCELLED") throw new BadRequestException("PO cancelled");
+    if (po.status === "CANCELLED") throw new BadRequestException("Purchase order is cancelled");
+    if (po.status === "RECEIVED") throw new BadRequestException("This purchase order has already been fully received");
+
+    const allAlreadyReceived = po.lines.length > 0 && po.lines.every((l: any) => Number(l.receivedQty) >= Number(l.quantity));
+    if (allAlreadyReceived) {
+      await this.prisma.purchaseOrder.update({
+        where: { id: purchaseOrderId },
+        data: { status: "RECEIVED" },
+      });
+      throw new BadRequestException("All items on this purchase order have already been received");
+    }
 
     const receive = await this.prisma.$transaction(async (tx: any) => {
       const number = await this.sequences.nextInTx(tx, orgId, "PR", "PR");

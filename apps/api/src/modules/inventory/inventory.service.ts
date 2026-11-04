@@ -102,12 +102,10 @@ export class InventoryService {
     args: StockMutation & { before: number; after: number; signedQty: number },
   ) {
     if (args.idempotencyKey) {
-      const existing = await tx.inventoryTransaction.findUnique({
+      const existing = await tx.inventoryTransaction.findFirst({
         where: {
-          organizationId_idempotencyKey: {
-            organizationId: args.organizationId,
-            idempotencyKey: args.idempotencyKey,
-          },
+          organizationId: args.organizationId,
+          idempotencyKey: args.idempotencyKey,
         },
       });
       if (existing) throw new ConflictException("Duplicate idempotency key");

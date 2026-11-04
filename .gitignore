@@ -15,3 +15,5 @@ uploads
 .turbo
 playwright-report
 test-results
+dev-dist
+apps/web/dev-dist

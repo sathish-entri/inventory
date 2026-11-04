@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Modal } from "antd";
 import { useAuth } from "./auth";
 import {
   LayoutDashboard, Package, Warehouse, Archive, ArrowLeftRight,
@@ -72,11 +73,90 @@ const mobileBottomTabs = [
   { to: "/products", label: "Products", icon: Package },
 ];
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  readonly userChoice: Promise<{
+    outcome: "accepted" | "dismissed";
+    platform: string;
+  }>;
+  prompt(): Promise<void>;
+}
+
 export function AppShell() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    // Check if running in standalone mode (already installed)
+    const checkStandalone = () => {
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+      setIsInstalled(Boolean(isStandalone));
+    };
+
+    checkStandalone();
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    const handleInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", handleInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") {
+        setInstallPrompt(null);
+        setIsInstalled(true);
+      }
+    } else {
+      Modal.info({
+        title: "Install Inventra as an App",
+        centered: true,
+        content: (
+          <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6 }}>
+            <p style={{ fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
+              💻 Google Chrome / Microsoft Edge on PC:
+            </p>
+            <p style={{ color: "#475569", marginBottom: 12 }}>
+              Look at your browser's address bar (top-right next to the bookmark star) and click the <strong>Install icon</strong> (🖥️ or 📥), or click the browser menu (<strong>⋮</strong>) and select <strong>"Install Inventra..."</strong>.
+            </p>
+            <p style={{ fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
+              📱 Android (Chrome):
+            </p>
+            <p style={{ color: "#475569", marginBottom: 12 }}>
+              Tap the <strong>three dots (⋮)</strong> in Chrome and tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.
+            </p>
+            <p style={{ fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
+              🍏 iPhone / iPad (Safari):
+            </p>
+            <p style={{ color: "#475569" }}>
+              Tap the <strong>Share</strong> button (square with arrow) at the bottom, then scroll down and tap <strong>"Add to Home Screen"</strong>.
+            </p>
+          </div>
+        ),
+      });
+    }
+  };
 
   const initials = user
     ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase()
@@ -134,6 +214,17 @@ export function AppShell() {
 
         {/* Footer */}
         <div className="sidebar-footer">
+          {!isInstalled && (
+            <button
+              onClick={handleInstallClick}
+              className="sidebar-install-btn"
+              title="Install Inventra as App"
+            >
+              <Download size={14} />
+              <span>Install App</span>
+            </button>
+          )}
+
           <div className="sidebar-user">
             <div className="sidebar-avatar">{initials}</div>
             <div className="sidebar-user-info">
@@ -169,13 +260,26 @@ export function AppShell() {
             <Boxes size={18} color="#5b9bf8" />
             Inventra
           </div>
-          <button
-            className="mobile-hamburger"
-            onClick={() => void logout().then(() => nav("/login"))}
-            aria-label="Sign out"
-          >
-            <LogOut size={18} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {!isInstalled && (
+              <button
+                className="mobile-install-btn"
+                onClick={handleInstallClick}
+                aria-label="Install App"
+                title="Install Inventra App"
+              >
+                <Download size={14} />
+                <span>Install</span>
+              </button>
+            )}
+            <button
+              className="mobile-hamburger"
+              onClick={() => void logout().then(() => nav("/login"))}
+              aria-label="Sign out"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Page content */}

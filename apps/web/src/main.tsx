@@ -1,8 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ConfigProvider, App as AntApp } from "antd";
+import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import "./index.css";
+
+// Register PWA service worker with auto-update
+registerSW({ immediate: true });
 
 const antTheme = {
   token: {
