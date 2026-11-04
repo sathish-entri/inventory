@@ -17,7 +17,7 @@ const antTheme = {
     borderRadius: 8,
     borderRadiusLG: 12,
     fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif",
-    fontSize: 13,
+    fontSize: 14,
     colorBgContainer: "#ffffff",
     colorBorder: "#e2e8f0",
     colorTextBase: "#0f172a",
@@ -29,25 +29,25 @@ const antTheme = {
   components: {
     Table: {
       headerBg: "#f8fafc",
-      headerColor: "#94a3b8",
+      headerColor: "#64748b",
       headerSortActiveBg: "#f1f5f9",
       rowHoverBg: "#f8fafd",
       cellPaddingBlock: 12,
-      cellPaddingInline: 16,
+      cellPaddingInline: 14,
       borderColor: "#f1f5f9",
       headerBorderRadius: 0,
     },
     Button: {
-      controlHeight: 34,
+      controlHeight: 38,
       paddingContentHorizontal: 16,
       primaryShadow: "none",
     },
     Input: {
-      controlHeight: 36,
-      paddingInline: 12,
+      controlHeight: 40,
+      paddingInline: 14,
     },
     Select: {
-      controlHeight: 36,
+      controlHeight: 40,
     },
     Modal: {
       borderRadiusLG: 20,
@@ -57,11 +57,11 @@ const antTheme = {
     },
     Form: {
       labelColor: "#475569",
-      labelFontSize: 12,
+      labelFontSize: 13,
     },
     Statistic: {
-      titleFontSize: 12,
-      contentFontSize: 26,
+      titleFontSize: 13,
+      contentFontSize: 28,
     },
     Tag: {
       borderRadiusSM: 100,

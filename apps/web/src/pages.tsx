@@ -533,7 +533,7 @@ function DataTable<T extends Record<string, unknown>>({
   columns, data = [], loading, error, searchFields, filterKey, filterOptions, emptyIcon, emptyText, onRowClick,
 }: DataTableProps<T>) {
   const [q, setQ] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [viewMode, setViewMode] = useState<"table" | "grid">(() => (typeof window !== "undefined" && window.innerWidth <= 768 ? "grid" : "table"));
   const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
 
   // Auto-detect filterKey if not provided (e.g. status, type, role)
