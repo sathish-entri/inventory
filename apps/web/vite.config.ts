@@ -14,8 +14,8 @@ export default defineConfig({
       },
       includeAssets: ["favicon.ico", "favicon.svg", "apple-touch-icon.png"],
       manifest: {
-        name: "Inventra — Inventory Operations",
-        short_name: "Inventra",
+        name: "Oscar — Inventory Operations",
+        short_name: "Oscar",
         description: "Enterprise Inventory, Order Management & Billing Platform",
         theme_color: "#0f1e35",
         background_color: "#0f1e35",

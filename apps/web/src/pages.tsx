@@ -1,6 +1,6 @@
 /**
- * Inventra – Premium Business UI
- * All page components for the Inventra inventory management system.
+ * Oscar – Premium Business UI
+ * All page components for the Oscar inventory management system.
  * Senior-grade implementation with full CRUD, status badges, modals,
  * search/filter, and rich data display.
  */
@@ -120,7 +120,7 @@ export function LoginPage() {
         <div style={{ marginBottom: 48 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
             <Boxes size={36} color="#5b9bf8" />
-            <span style={{ fontSize: 28, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>Inventra</span>
+            <span style={{ fontSize: 28, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>Oscar</span>
           </div>
           <h2 style={{ fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1.2, marginBottom: 16 }}>
             Complete Inventory<br />Management System
@@ -145,7 +145,7 @@ export function LoginPage() {
         <div className="auth-card">
           <div className="auth-mobile-header">
             <Boxes size={32} color="#1565d8" />
-            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Inventra</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Oscar</span>
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Sign in</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 28, fontSize: 14 }}>
@@ -223,7 +223,7 @@ export function RegisterPage() {
       <div className="auth-panel-left">
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
           <Boxes size={36} color="#5b9bf8" />
-          <span style={{ fontSize: 28, fontWeight: 800, color: "#fff" }}>Inventra</span>
+          <span style={{ fontSize: 28, fontWeight: 800, color: "#fff" }}>Oscar</span>
         </div>
         <h2 style={{ fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.3 }}>
           Start your free<br />trial today
@@ -236,7 +236,7 @@ export function RegisterPage() {
         <div className="auth-card">
           <div className="auth-mobile-header">
             <Boxes size={32} color="#1565d8" />
-            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Inventra</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Oscar</span>
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Create your organization</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: 13 }}>Fill in the details to get started.</p>

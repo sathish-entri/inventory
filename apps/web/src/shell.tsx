@@ -125,7 +125,7 @@ export function AppShell() {
       }
     } else {
       Modal.info({
-        title: "Install Inventra as an App",
+        title: "Install Oscar as an App",
         centered: true,
         content: (
           <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.6 }}>
@@ -133,7 +133,7 @@ export function AppShell() {
               💻 Google Chrome / Microsoft Edge on PC:
             </p>
             <p style={{ color: "#475569", marginBottom: 12 }}>
-              Look at your browser's address bar (top-right next to the bookmark star) and click the <strong>Install icon</strong> (🖥️ or 📥), or click the browser menu (<strong>⋮</strong>) and select <strong>"Install Inventra..."</strong>.
+              Look at your browser's address bar (top-right next to the bookmark star) and click the <strong>Install icon</strong> (🖥️ or 📥), or click the browser menu (<strong>⋮</strong>) and select <strong>"Install Oscar..."</strong>.
             </p>
             <p style={{ fontWeight: 600, color: "#0f172a", marginBottom: 4 }}>
               📱 Android (Chrome):
@@ -175,7 +175,7 @@ export function AppShell() {
           <div>
             <div className="sidebar-logo-name">
               <Boxes size={22} color="#5b9bf8" />
-              <span>Inventra</span>
+              <span>Oscar</span>
             </div>
             <div className="sidebar-org">{user?.organization?.name ?? "Loading…"}</div>
           </div>
@@ -214,7 +214,7 @@ export function AppShell() {
             <button
               onClick={handleInstallClick}
               className="sidebar-install-btn"
-              title="Install Inventra as App"
+              title="Install Oscar as App"
             >
               <Download size={15} />
               <span>Install App</span>
@@ -259,7 +259,7 @@ export function AppShell() {
 
           <div className="mobile-topbar-logo">
             <Boxes size={20} color="#5b9bf8" />
-            <span>Inventra</span>
+            <span>Oscar</span>
             {user?.organization?.name && (
               <span className="mobile-topbar-org">{user.organization.name}</span>
             )}
@@ -271,7 +271,7 @@ export function AppShell() {
                 className="mobile-install-btn"
                 onClick={handleInstallClick}
                 aria-label="Install App"
-                title="Install Inventra App"
+                title="Install Oscar App"
               >
                 <Download size={14} />
                 <span>Install</span>
