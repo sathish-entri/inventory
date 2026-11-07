@@ -156,7 +156,7 @@ export class SalesService {
       }
     }
 
-    const isConfirmed = Boolean(order) || estimate?.status === "ACCEPTED";
+    const isConfirmed = Boolean(order);
 
     // Determine current Tracking Stage:
     // 1 = Order Confirmed
@@ -332,20 +332,34 @@ export class SalesService {
       },
     });
 
-    if (existingOrder || estimate.status === "ACCEPTED") {
+    if (existingOrder) {
       return {
         success: true,
         alreadyConfirmed: true,
         message: "Order was already confirmed previously.",
-        orderId: existingOrder?.id,
+        orderId: existingOrder.id,
+        orderNumber: existingOrder.number,
       };
     }
 
-    // Find default warehouse
+    // Find or create default warehouse
+    let warehouseId: string;
     const wh = await this.prisma.warehouse.findFirst({
       where: { organizationId: estimate.organizationId },
     });
-    const warehouseId = wh?.id ?? "default";
+    if (wh) {
+      warehouseId = wh.id;
+    } else {
+      const defaultWh = await this.prisma.warehouse.create({
+        data: {
+          organizationId: estimate.organizationId,
+          name: "Main Factory Warehouse",
+          code: "MAIN",
+          address: "Main Factory Plant",
+        },
+      });
+      warehouseId = defaultWh.id;
+    }
 
     // Generate SO number
     const soNumber = await this.sequences.nextInTx(this.prisma, estimate.organizationId, "SO", "SO");
@@ -374,6 +388,7 @@ export class SalesService {
           })),
         },
       },
+      include: { lines: true, customer: true },
     });
 
     // Update estimate status to ACCEPTED
@@ -389,6 +404,83 @@ export class SalesService {
       orderId: newOrder.id,
       orderNumber: newOrder.number,
     };
+  }
+
+  async convertEstimateToSalesOrder(orgId: string, estimateId: string, warehouseId?: string) {
+    const estimate = await this.prisma.estimate.findFirst({
+      where: { id: estimateId, organizationId: orgId },
+      include: { customer: true, lines: true },
+    });
+    if (!estimate) throw new NotFoundException("Estimate quotation not found");
+
+    // Check if an order already exists for this estimate
+    const existingOrder = await this.prisma.salesOrder.findFirst({
+      where: {
+        organizationId: orgId,
+        notes: { contains: `[EST:${estimate.id}]` },
+      },
+      include: { lines: true, customer: true },
+    });
+    if (existingOrder) {
+      await this.prisma.estimate.update({ where: { id: estimate.id }, data: { status: "ACCEPTED" } });
+      return existingOrder;
+    }
+
+    // Determine warehouse
+    let whId = warehouseId;
+    if (!whId) {
+      const wh = await this.prisma.warehouse.findFirst({ where: { organizationId: orgId } });
+      whId = wh?.id;
+    }
+    if (!whId) {
+      const defaultWh = await this.prisma.warehouse.create({
+        data: {
+          organizationId: orgId,
+          name: "Main Factory Warehouse",
+          code: "MAIN",
+          address: "Main Factory Plant",
+        },
+      });
+      whId = defaultWh.id;
+    }
+
+    // Generate SO number
+    const soNumber = await this.sequences.nextInTx(this.prisma, orgId, "SO", "SO");
+
+    // Create confirmed Sales Order
+    const newOrder = await this.prisma.salesOrder.create({
+      data: {
+        organizationId: orgId,
+        number: soNumber,
+        customerId: estimate.customerId,
+        warehouseId: whId,
+        status: "CONFIRMED",
+        subtotal: estimate.subtotal,
+        tax: estimate.tax,
+        discount: estimate.discount,
+        total: estimate.total,
+        notes: `Converted from Estimate Quote ${estimate.number} [EST:${estimate.id}]`,
+        lines: {
+          create: (estimate.lines ?? []).map((l: any) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            taxRate: l.taxRate,
+            amount: l.amount,
+            description: l.description,
+          })),
+        },
+      },
+      include: { lines: true, customer: true },
+    });
+
+    // Mark estimate as ACCEPTED
+    await this.prisma.estimate.update({
+      where: { id: estimate.id },
+      data: { status: "ACCEPTED" },
+    });
+
+    return newOrder;
   }
 
   async createEstimate(orgId: string, customerId: string, lines: CreateSalesOrderDto["lines"], discount = 0) {
@@ -459,13 +551,30 @@ export class SalesService {
     const priced = await this.priceLines(orgId, linesToProcess, "sell");
     const totals = documentTotals(priced, dto.discount ?? 0, dto.shipping ?? 0);
     return this.prisma.$transaction(async (tx: any) => {
+      let warehouseId = dto.warehouseId;
+      if (!warehouseId) {
+        const wh = await tx.warehouse.findFirst({ where: { organizationId: orgId } });
+        warehouseId = wh?.id;
+      }
+      if (!warehouseId) {
+        const defaultWh = await tx.warehouse.create({
+          data: {
+            organizationId: orgId,
+            name: "Main Factory Warehouse",
+            code: "MAIN",
+            address: "Main Factory Plant",
+          },
+        });
+        warehouseId = defaultWh.id;
+      }
+
       const number = await this.sequences.nextInTx(tx, orgId, "SO", "SO");
       return tx.salesOrder.create({
         data: {
           organizationId: orgId,
           number,
           customerId: dto.customerId,
-          warehouseId: dto.warehouseId,
+          warehouseId,
           notes: dto.notes,
           ...totals,
           lines: {

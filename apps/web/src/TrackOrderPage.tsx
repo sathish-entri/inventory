@@ -121,19 +121,24 @@ export function TrackOrderPage() {
 
   const { order, estimate, factory, isConfirmed } = data;
   const currentStep = order?.trackingStep ?? (isConfirmed ? 1 : 0);
+  const displayTotal = Number(estimate?.total || order?.total || 0);
 
   const steps = [
     {
       num: 1,
-      title: "Order Confirmed",
-      subtitle: isConfirmed ? (order?.confirmedAt ? `Approved on ${new Date(order.confirmedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Quotation accepted") : "Pending Customer Approval",
-      date: isConfirmed ? "Confirmed" : "Step 1",
-      icon: CheckCircle2,
-      color: "#16a34a",
+      title: isConfirmed ? "Order Confirmed & Approved" : "1. Quotation Review & Approval",
+      subtitle: isConfirmed
+        ? (order?.confirmedAt
+            ? `Approved on ${new Date(order.confirmedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+            : "Quotation accepted & sent to production queue")
+        : "Pending Customer Approval (Click 'Confirm Order' below)",
+      date: isConfirmed ? "✓ Confirmed" : "Pending Approval",
+      icon: isConfirmed ? CheckCircle2 : Clock,
+      color: isConfirmed ? "#16a34a" : "#f59e0b",
     },
     {
       num: 2,
-      title: "Packed & Prepared",
+      title: "2. Packed & Prepared",
       subtitle: currentStep >= 2 ? `Boxed #${order?.package?.number || "PKG-1001"}` : "Factory staging & packaging",
       date: order?.package?.packedAt ? new Date(order.package.packedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : currentStep >= 2 ? "Ready" : "Pending",
       icon: Package,
@@ -141,7 +146,7 @@ export function TrackOrderPage() {
     },
     {
       num: 3,
-      title: "Dispatched / Shipping",
+      title: "3. Dispatched / Shipping",
       subtitle: currentStep >= 3 ? `${order?.shipment?.carrier || "Logistics"} • ${order?.shipment?.trackingNumber || "Dispatched"}` : "Factory dispatch to vehicle",
       date: order?.shipment?.shippedAt ? new Date(order.shipment.shippedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : currentStep >= 3 ? "In Transit" : "Upcoming",
       icon: Truck,
@@ -149,7 +154,7 @@ export function TrackOrderPage() {
     },
     {
       num: 4,
-      title: "Delivered",
+      title: "4. Delivered",
       subtitle: currentStep >= 4 ? "Received at destination" : "Final handover to customer",
       date: currentStep >= 4 ? "Delivered" : "Final Step",
       icon: CheckCheck,
@@ -375,25 +380,31 @@ export function TrackOrderPage() {
 
         {/* Status Notification Banner */}
         <div style={{
-          background: isConfirmed ? "#16a34a" : "#d97706",
+          background: isConfirmed ? "#16a34a" : "#b45309",
           color: "#fff",
-          padding: "12px 14px",
+          padding: "12px 16px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: 8,
+          boxShadow: isConfirmed ? "0 4px 12px rgba(22, 163, 74, 0.25)" : "0 4px 12px rgba(180, 83, 9, 0.25)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {isConfirmed ? <CheckCircle2 size={18} /> : <Clock size={18} />}
-            <span style={{ fontSize: 13, fontWeight: 700 }}>
-              {isConfirmed
-                ? (justConfirmed ? "🎉 Order Confirmed! Factory Team Notified." : `Order Status: ${currentStep === 4 ? "Delivered" : currentStep === 3 ? "In Transit / Dispatched" : currentStep === 2 ? "Packed in Factory" : "Order Confirmed & Processing"}`)
-                : "Official Price Quotation (Approval Pending)"}
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isConfirmed ? <CheckCircle2 size={20} /> : <Clock size={20} />}
+            <div>
+              <span style={{ fontSize: 14, fontWeight: 800, display: "block" }}>
+                {isConfirmed
+                  ? (justConfirmed ? "🎉 Order Confirmed! Factory Team Notified." : `Order Status: ${currentStep === 4 ? "Delivered" : currentStep === 3 ? "In Transit / Dispatched" : currentStep === 2 ? "Packed in Factory" : "Order Confirmed & Staged in Production"}`)
+                  : `📋 Price Quotation (${estimate?.number || "EST"}) — Awaiting Your Approval`}
+              </span>
+              <span style={{ fontSize: 11, opacity: 0.9 }}>
+                {isConfirmed ? "Live production & dispatch tracking active below" : "Review quotation below and click 'Confirm Order' button to place order"}
+              </span>
+            </div>
           </div>
-          <div style={{ background: "rgba(255,255,255,0.2)", padding: "3px 10px", borderRadius: 16, fontSize: 11, fontWeight: 700 }}>
-            {isConfirmed ? `Order #${order?.number}` : `Quote #${estimate?.number || "EST"}`}
+          <div style={{ background: "rgba(255,255,255,0.22)", padding: "4px 12px", borderRadius: 16, fontSize: 12, fontWeight: 800 }}>
+            {isConfirmed ? `Order #${order?.number || ""}` : `Quote #${estimate?.number || "EST"}`}
           </div>
         </div>
 
@@ -402,15 +413,15 @@ export function TrackOrderPage() {
 
           {/* ── 1-CLICK CONFIRMATION CTA (Shown ONLY if NOT yet confirmed!) ── */}
           {!isConfirmed ? (
-            <div className="track-confirm-cta-box">
-              <span style={{ display: "inline-block", background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, marginBottom: 8 }}>
-                📌 QUOTATION APPROVAL PENDING
+            <div className="track-confirm-cta-box" style={{ background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)", border: "2px solid #fcd34d", padding: "24px 18px" }}>
+              <span style={{ display: "inline-block", background: "#f59e0b", color: "#fff", fontSize: 11, fontWeight: 800, padding: "3px 12px", borderRadius: 20, marginBottom: 10, letterSpacing: "0.5px" }}>
+                ⏳ CUSTOMER APPROVAL REQUIRED
               </span>
-              <h3 style={{ margin: "0 0 6px 0", fontSize: 17, fontWeight: 800, color: "#14532d" }}>
-                Ready to confirm this order?
+              <h3 style={{ margin: "0 0 6px 0", fontSize: 19, fontWeight: 800, color: "#92400e" }}>
+                Confirm Your Order With Our Factory
               </h3>
-              <p style={{ margin: "0 auto", fontSize: 13, color: "#166534", maxWidth: 480, lineHeight: 1.4 }}>
-                Review the items and pricing below. Click the button below to approve and trigger manufacturing at our factory.
+              <p style={{ margin: "0 auto", fontSize: 13, color: "#78350f", maxWidth: 520, lineHeight: 1.5 }}>
+                Review the items and quote amount below. To proceed with manufacturing, please click the <strong>"Approve & Confirm Order"</strong> button below.
               </p>
 
               <button
@@ -418,34 +429,48 @@ export function TrackOrderPage() {
                 className="track-btn-confirm"
                 disabled={confirming}
                 onClick={handleConfirmOrder}
+                style={{
+                  background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                  fontSize: 16,
+                  padding: "16px 28px",
+                  marginTop: 16,
+                  boxShadow: "0 6px 20px rgba(22, 163, 74, 0.4)",
+                }}
               >
                 {confirming ? (
                   <>
-                    <span style={{ width: 16, height: 16, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "trackSpin 0.8s linear infinite", display: "inline-block" }} />
-                    Confirming Order…
+                    <span style={{ width: 18, height: 18, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "trackSpin 0.8s linear infinite", display: "inline-block" }} />
+                    Registering Confirmation with Factory…
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 size={18} /> Confirm & Place Order (₹{Number(order?.total || 0).toLocaleString("en-IN")})
+                    <CheckCircle2 size={20} /> Approve & Confirm Order (₹{displayTotal.toLocaleString("en-IN")})
                   </>
                 )}
               </button>
 
-              <div style={{ fontSize: 11, color: "#15803d", marginTop: 8 }}>
-                🔒 1-Click Secure Approval • Direct to Production Floor
+              <div style={{ fontSize: 11, color: "#92400e", marginTop: 10, fontWeight: 600 }}>
+                🔒 1-Click Secure Factory Authorization • Production queue starts immediately upon click
               </div>
             </div>
           ) : (
             /* ── ALREADY CONFIRMED BADGE (Cannot be clicked again!) ── */
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "10px 14px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <CheckCircle2 size={16} color="#16a34a" />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#15803d" }}>
-                  Order Confirmed & Approved
-                </span>
+            <div style={{ background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 12, padding: "14px 18px", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, background: "#dcfce7", color: "#15803d", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: "#15803d", display: "block" }}>
+                    ✓ Order Approved & Confirmed
+                  </span>
+                  <span style={{ fontSize: 12, color: "#166534" }}>
+                    Order has been registered directly in the factory production system (Order #{order?.number || ""})
+                  </span>
+                </div>
               </div>
-              <span style={{ fontSize: 12, color: "#166534" }}>
-                Confirmed: <strong>{order?.confirmedAt ? new Date(order.confirmedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "Yes"}</strong>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#15803d", background: "#dcfce7", padding: "4px 10px", borderRadius: 6 }}>
+                Status: CONFIRMED
               </span>
             </div>
           )}

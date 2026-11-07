@@ -4599,11 +4599,11 @@ export function PrintEstimateModal({
       `*Total Quote Amount:* ₹${total.toLocaleString("en-IN")}`,
       `*Validity:* Valid for 30 Days`,
       ``,
-      `🔗 *CLICK LINK TO CONFIRM & TRACK ORDER:*`,
+      `🔗 *CLICK LINK TO REVIEW & CONFIRM ORDER:*`,
       ``,
       trackUrl,
       ``,
-      `*(Clicking this link opens your live order tracker and instantly registers your order confirmation with our factory team)*`,
+      `*(Click the link above to view your official quotation & click the "Approve & Confirm Order" button to register with factory)*`,
       ``,
       `📞 For any enquiry, call or WhatsApp +91 94432 51863`,
       `Thank you!`
@@ -4870,20 +4870,12 @@ export function EstimatesPage() {
 
   const convertToOrder = useMutation({
     mutationFn: async (estimate: Estimate) => {
-      return api.post("/sales-orders", {
-        customerId: estimate.customer?.id,
-        warehouseId: form.warehouseId || undefined,
-        lines: (estimate.lines ?? []).map((l: any) => ({
-          productId: l.productId,
-          quantity: Number(l.quantity),
-          unitPrice: Number(l.unitPrice),
-          taxRate: Number(l.taxRate),
-        })),
-      });
+      return api.post(`/estimates/${estimate.id}/convert`);
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["estimates"] });
       qc.invalidateQueries({ queryKey: ["so"] });
-      toast("Estimate converted to Sales Order successfully!");
+      toast(`Estimate converted to Confirmed Sales Order #${res.data?.number || ""}!`);
     },
     onError: (err: any) => toast(err.response?.data?.message ?? "Could not convert estimate.", "error"),
   });
