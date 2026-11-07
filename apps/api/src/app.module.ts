@@ -11,6 +11,7 @@ import { InventoryService } from "./modules/inventory/inventory.service";
 import { InventoryController } from "./modules/inventory/inventory.controller";
 import { SalesService } from "./modules/sales/sales.service";
 import { SalesController } from "./modules/sales/sales.controller";
+import { PublicTrackingController } from "./modules/sales/public-tracking.controller";
 import { PurchasesService } from "./modules/purchases/purchases.service";
 import { PurchasesController } from "./modules/purchases/purchases.controller";
 import { ReportsService } from "./modules/reports/reports.service";
@@ -43,6 +44,7 @@ import {
     CatalogController,
     InventoryController,
     SalesController,
+    PublicTrackingController,
     PurchasesController,
     ReportsController,
     AdminController,

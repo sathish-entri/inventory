@@ -31,6 +31,12 @@ const groups = [
     ],
   },
   {
+    title: "Manufacturing",
+    items: [
+      { to: "/manufacturing", label: "Production & BOM", icon: Boxes },
+    ],
+  },
+  {
     title: "Sales",
     items: [
       { to: "/customers", label: "Customers", icon: Users },

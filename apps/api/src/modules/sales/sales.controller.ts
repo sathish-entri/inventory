@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import { SalesService } from "./sales.service";
@@ -10,7 +10,7 @@ import { CreateEstimateDto, CreateSalesOrderDto, PackageDto, PaymentDto, ReturnD
 @ApiTags("sales")
 @ApiBearerAuth()
 @UseGuards(AuthGuard("jwt"), PermissionsGuard)
-@Controller()
+@Controller() 
 export class SalesController {
   constructor(private readonly sales: SalesService) {}
 
@@ -22,8 +22,8 @@ export class SalesController {
 
   @Get("estimates")
   @RequirePermissions("estimate:read")
-  listEstimates(@CurrentUser() user: AuthUser) {
-    return this.sales.listEstimates(user.organizationId);
+  listEstimates(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.sales.listEstimates(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
   }
 
   @Post("estimates/:id/send-email")
@@ -40,8 +40,8 @@ export class SalesController {
 
   @Get("sales-orders")
   @RequirePermissions("sales_order:read")
-  listSO(@CurrentUser() user: AuthUser) {
-    return this.sales.listSalesOrders(user.organizationId);
+  listSO(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string, @Query("status") status?: string) {
+    return this.sales.listSalesOrders(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50, status });
   }
 
   @Get("sales-orders/:id")
@@ -70,8 +70,8 @@ export class SalesController {
 
   @Get("packages")
   @RequirePermissions("package:read")
-  packages(@CurrentUser() user: AuthUser) {
-    return this.sales.listPackages(user.organizationId);
+  packages(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.sales.listPackages(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
   }
 
   @Post("shipments/from-package/:packageId")
@@ -82,8 +82,8 @@ export class SalesController {
 
   @Get("shipments")
   @RequirePermissions("shipment:read")
-  shipments(@CurrentUser() user: AuthUser) {
-    return this.sales.listShipments(user.organizationId);
+  shipments(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.sales.listShipments(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
   }
 
   @Post("invoices/from-order/:salesOrderId")
@@ -94,8 +94,8 @@ export class SalesController {
 
   @Get("invoices")
   @RequirePermissions("invoice:read")
-  invoices(@CurrentUser() user: AuthUser) {
-    return this.sales.listInvoices(user.organizationId);
+  invoices(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string, @Query("status") status?: string) {
+    return this.sales.listInvoices(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50, status });
   }
 
   @Post("payments")
@@ -106,8 +106,8 @@ export class SalesController {
 
   @Get("payments")
   @RequirePermissions("payment:read")
-  payments(@CurrentUser() user: AuthUser) {
-    return this.sales.listPayments(user.organizationId);
+  payments(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.sales.listPayments(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
   }
 
   @Post("sales-returns")
@@ -124,7 +124,7 @@ export class SalesController {
 
   @Get("sales-returns")
   @RequirePermissions("return:read")
-  listReturns(@CurrentUser() user: AuthUser) {
-    return this.sales.listSalesReturns(user.organizationId);
+  listReturns(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.sales.listSalesReturns(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
   }
 }

@@ -14,23 +14,6 @@ export class PurchasesService {
   ) {}
 
   async createPurchaseOrder(orgId: string, dto: CreatePurchaseOrderDto) {
-    if (!dto.vendorId || !dto.vendorId.trim()) {
-      throw new BadRequestException("Vendor is required");
-    }
-    if (!dto.warehouseId || !dto.warehouseId.trim()) {
-      throw new BadRequestException("Warehouse is required");
-    }
-
-    const vendor = await this.prisma.vendor.findFirst({
-      where: { id: dto.vendorId, organizationId: orgId },
-    });
-    if (!vendor) throw new BadRequestException("Vendor not found. Please select a valid vendor.");
-
-    const warehouse = await this.prisma.warehouse.findFirst({
-      where: { id: dto.warehouseId, organizationId: orgId },
-    });
-    if (!warehouse) throw new BadRequestException("Warehouse not found. Please select a valid warehouse.");
-
     const rawLines = Array.isArray(dto.lines) ? dto.lines.flat(2) : [];
     const linesToProcess = rawLines.filter((l: any) => l && l.productId && Number(l.quantity) > 0);
     if (!linesToProcess.length) {
@@ -80,10 +63,18 @@ export class PurchasesService {
     });
   }
 
-  listPurchaseOrders(orgId: string) {
+  listPurchaseOrders(orgId: string, page = 1, pageSize = 20) {
+    const skip = (page - 1) * pageSize;
     return this.prisma.purchaseOrder.findMany({
       where: { organizationId: orgId },
-      include: { vendor: true, lines: true },
+      select: {
+        id: true, number: true, status: true, date: true, expectedDate: true,
+        subtotal: true, tax: true, total: true, notes: true, warehouseId: true,
+        vendor: { select: { id: true, name: true, email: true, phone: true } },
+        lines: { select: { id: true, productId: true, quantity: true, receivedQty: true, unitCost: true, taxRate: true, amount: true } },
+      },
+      skip,
+      take: pageSize,
       orderBy: { date: "desc" },
     });
   }
@@ -209,10 +200,17 @@ export class PurchasesService {
     return receive;
   }
 
-  listReceives(orgId: string) {
+  listReceives(orgId: string, page = 1, pageSize = 20) {
+    const skip = (page - 1) * pageSize;
     return this.prisma.purchaseReceive.findMany({
       where: { organizationId: orgId },
-      include: { purchaseOrder: true, lines: true },
+      select: {
+        id: true, number: true, receivedAt: true, purchaseOrderId: true,
+        purchaseOrder: { select: { id: true, number: true, vendor: { select: { id: true, name: true } } } },
+        lines: { select: { id: true, productId: true, quantity: true, batchNumber: true } },
+      },
+      skip,
+      take: pageSize,
       orderBy: { receivedAt: "desc" },
     });
   }
@@ -244,10 +242,20 @@ export class PurchasesService {
     });
   }
 
-  listBills(orgId: string) {
+  listBills(orgId: string, page = 1, pageSize = 20, status?: string) {
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: orgId };
+    if (status) where.status = status;
     return this.prisma.bill.findMany({
-      where: { organizationId: orgId },
-      include: { vendor: true },
+      where,
+      select: {
+        id: true, number: true, status: true, date: true, dueDate: true,
+        total: true, amountPaid: true, vendorId: true, purchaseOrderId: true,
+        vendor: { select: { id: true, name: true, email: true, phone: true } },
+        lines: { select: { id: true, productId: true, description: true, quantity: true, unitCost: true, amount: true } },
+      },
+      skip,
+      take: pageSize,
       orderBy: { date: "desc" },
     });
   }
@@ -315,10 +323,18 @@ export class PurchasesService {
     });
   }
 
-  listPurchaseReturns(orgId: string) {
+  listPurchaseReturns(orgId: string, page = 1, pageSize = 20) {
+    const skip = (page - 1) * pageSize;
     return this.prisma.purchaseReturn.findMany({
       where: { organizationId: orgId },
-      include: { vendor: true, lines: true },
+      select: {
+        id: true, number: true, status: true, reason: true, createdAt: true,
+        vendor: { select: { id: true, name: true } },
+        lines: { select: { id: true, productId: true, quantity: true } },
+      },
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: "desc" },
     });
   }
 }

@@ -12,6 +12,7 @@ import {
   InvoicesPage,
   InventoryPage,
   LoginPage,
+  ManufacturingPage,
   PartiesPage,
   PaymentsPage,
   ProductsPage,
@@ -28,6 +29,7 @@ import {
   WarehousesPage,
   useToastStyles,
 } from "./pages";
+import { TrackOrderPage } from "./TrackOrderPage";
 
 const client = new QueryClient();
 
@@ -37,6 +39,7 @@ function StyledRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/track-order/:id" element={<TrackOrderPage />} />
       <Route
         path="/"
         element={
@@ -51,6 +54,7 @@ function StyledRoutes() {
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="adjustments" element={<AdjustmentsPage />} />
         <Route path="transfers" element={<TransfersPage />} />
+        <Route path="manufacturing" element={<ManufacturingPage />} />
         <Route path="customers" element={<PartiesPage kind="customers" />} />
         <Route path="vendors" element={<PartiesPage kind="vendors" />} />
         <Route path="estimates" element={<EstimatesPage />} />

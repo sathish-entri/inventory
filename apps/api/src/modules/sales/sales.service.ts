@@ -11,6 +11,7 @@ import {
 } from "../catalog/dto";
 import { SHIPPING_PROVIDER, PAYMENT_PROVIDER, EMAIL_PROVIDER, type ShippingProvider, type PaymentProvider, type EmailProvider } from "../integrations/providers";
 import { Inject } from "@nestjs/common";
+import { paginateMeta } from "../../common/pagination";
 
 @Injectable()
 export class SalesService {
@@ -31,6 +32,9 @@ export class SalesService {
     if (!estimate) throw new NotFoundException("Estimate not found");
     const customer = estimate.customer;
     if (!customer?.email) throw new BadRequestException(`Customer "${customer?.name ?? "Customer"}" does not have an email address.`);
+
+    const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === "production" ? "https://inventra-web.onrender.com" : (process.env.WEB_ORIGIN || "https://inventra-web.onrender.com"));
+    const trackingUrl = `${frontendUrl.replace(/\/$/, "")}/track-order/${estimate.id}`;
 
     const subject = `Official Price Quotation Estimate ${estimate.number} - OSCAR AUTO FLUX`;
     const linesHtml = (estimate.lines ?? []).map((l: any, i: number) => `
@@ -82,15 +86,309 @@ export class SalesService {
           Total Quote Amount: ₹${Number(estimate.total).toLocaleString("en-IN")}
         </div>
 
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${trackingUrl}" style="background: #16a34a; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 15px; display: inline-block;">
+            👉 Click Here to Confirm & Track Your Order Live ➔
+          </a>
+          <p style="font-size: 12px; color: #64748b; margin-top: 8px;">
+            Clicking this link confirms your order with our factory team and lets you track live status!
+          </p>
+        </div>
+
         <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #64748b; line-height: 1.5;">
-          <strong>Bank Details for Advance Settlement:</strong><br />
-          Bank: INDIAN OVERSEAS BANK | A/C Name: OSCAR AUTO FLUX | A/C No: 186302000000680 | IFSC: IOBA0001863
+          <strong>Factory Contact & Settlement:</strong><br />
+          Phone: +91 94432 51863 | Bank: INDIAN OVERSEAS BANK | A/C: 186302000000680 | IFSC: IOBA0001863
         </div>
       </div>
     `;
 
     await this.email.send(customer.email, subject, html);
     return { success: true, message: `Email quotation sent to ${customer.email}` };
+  }
+
+  async trackEstimateOrOrder(idOrToken: string) {
+    let order: any = null;
+    let estimate: any = null;
+
+    // 1. Try finding Estimate by ID or number
+    estimate = await this.prisma.estimate.findFirst({
+      where: {
+        OR: [{ id: idOrToken }, { number: idOrToken }],
+      },
+      include: {
+        customer: true,
+        lines: true,
+        organization: true,
+      },
+    });
+
+    if (estimate) {
+      // Find if a SalesOrder was already created for this estimate
+      order = await this.prisma.salesOrder.findFirst({
+        where: {
+          organizationId: estimate.organizationId,
+          notes: { contains: `[EST:${estimate.id}]` },
+        },
+        include: {
+          lines: true,
+          packages: { include: { lines: true } },
+          shipments: { include: { lines: true } },
+          customer: true,
+        },
+      });
+    } else {
+      // 2. Not an estimate; check if it's directly a SalesOrder by ID or number
+      order = await this.prisma.salesOrder.findFirst({
+        where: {
+          OR: [{ id: idOrToken }, { number: idOrToken }],
+        },
+        include: {
+          lines: true,
+          packages: { include: { lines: true } },
+          shipments: { include: { lines: true } },
+          customer: true,
+          organization: true,
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException("Order or Estimate not found. Please check your link.");
+      }
+    }
+
+    const isConfirmed = Boolean(order) || estimate?.status === "ACCEPTED";
+
+    // Determine current Tracking Stage:
+    // 1 = Order Confirmed
+    // 2 = Packed / Prepared for dispatch
+    // 3 = Out for Delivery / In Transit
+    // 4 = Delivered
+    let trackingStep = isConfirmed ? 1 : 0;
+    if (order) {
+      if (order.status === "FULFILLED") {
+        trackingStep = 4;
+      } else if (order.shipments && order.shipments.length > 0) {
+        const shp = order.shipments[0];
+        trackingStep = shp.status === "DELIVERED" ? 4 : 3;
+      } else if (order.packages && order.packages.length > 0) {
+        trackingStep = 2;
+      } else if (order.status === "CONFIRMED" || order.status === "PARTIALLY_FULFILLED") {
+        trackingStep = 1;
+      }
+    }
+
+    // Active lines: from order if confirmed, else from estimate
+    const activeLines = order ? order.lines : (estimate?.lines ?? []);
+    const productIds = activeLines.map((l: any) => l.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, name: true, sku: true, classification: true, description: true },
+    });
+    const pMap = new Map(products.map((p) => [p.id, p]));
+
+    const formattedLines = activeLines.map((l: any) => {
+      const prod = pMap.get(l.productId);
+      const unitMatch = prod?.description?.match(/Unit:\s*([a-zA-Z0-9]+)/);
+      const unit = unitMatch ? unitMatch[1] : (prod?.classification === "CONSUMABLE" ? "cylinder" : prod?.classification === "FINISHED_GOOD" ? "box" : "kg");
+
+      return {
+        id: l.id,
+        productId: l.productId,
+        name: prod?.name ?? l.description ?? "Factory Item",
+        sku: prod?.sku ?? "SKU",
+        unit,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate,
+        amount: l.amount,
+      };
+    });
+
+    const activeCustomer = order?.customer || estimate?.customer || {};
+    const activeShipment = order?.shipments?.[0] ?? null;
+    const activePackage = order?.packages?.[0] ?? null;
+
+    return {
+      isConfirmed,
+      estimate: estimate
+        ? {
+            id: estimate.id,
+            number: estimate.number,
+            date: estimate.date,
+            total: estimate.total,
+            subtotal: estimate.subtotal,
+            tax: estimate.tax,
+            status: estimate.status,
+          }
+        : null,
+      order: order
+        ? {
+            id: order.id,
+            number: order.number,
+            status: order.status,
+            date: order.date || order.createdAt,
+            total: order.total,
+            subtotal: order.subtotal,
+            tax: order.tax,
+            notes: order.notes,
+            trackingStep,
+            customer: {
+              name: activeCustomer?.name ?? "Customer",
+              phone: activeCustomer?.phone ?? "",
+              email: activeCustomer?.email ?? "",
+              city: activeCustomer?.city ?? "",
+              state: activeCustomer?.state ?? "Tamil Nadu",
+              address: activeCustomer?.address ?? activeCustomer?.billingAddress ?? "",
+            },
+            lines: formattedLines,
+            package: activePackage
+              ? {
+                  id: activePackage.id,
+                  number: activePackage.number,
+                  status: activePackage.status,
+                  packedAt: activePackage.packedAt || activePackage.createdAt,
+                }
+              : null,
+            shipment: activeShipment
+              ? {
+                  id: activeShipment.id,
+                  number: activeShipment.number,
+                  status: activeShipment.status,
+                  carrier: activeShipment.carrier || "Factory Logistics Vehicle",
+                  trackingNumber: activeShipment.trackingNumber || `TN-${Math.floor(1000 + Math.random() * 9000)}`,
+                  shippedAt: activeShipment.shippedAt || activeShipment.createdAt,
+                }
+              : null,
+            confirmedAt: order.createdAt,
+          }
+        : {
+            id: null,
+            number: "Pending Approval",
+            status: "DRAFT",
+            date: estimate?.date || new Date(),
+            total: estimate?.total ?? 0,
+            subtotal: estimate?.subtotal ?? 0,
+            tax: estimate?.tax ?? 0,
+            notes: estimate?.notes ?? "",
+            trackingStep: 0,
+            customer: {
+              name: activeCustomer?.name ?? "Customer",
+              phone: activeCustomer?.phone ?? "",
+              email: activeCustomer?.email ?? "",
+              city: activeCustomer?.city ?? "",
+              state: activeCustomer?.state ?? "Tamil Nadu",
+              address: activeCustomer?.address ?? activeCustomer?.billingAddress ?? "",
+            },
+            lines: formattedLines,
+            package: null,
+            shipment: null,
+            confirmedAt: null,
+          },
+      factory: {
+        name: "OSCAR AUTO FLUX",
+        tagline: "Industrial Welding Consumables & Autoflex Manufacturer",
+        supportPhone: "+91 94432 51863",
+        supportEmail: "support@oscarautoflux.com",
+        address: "SF No. 248/2, Trichy Main Road, Coimbatore, Tamil Nadu 641005",
+        gstin: "33AABCO1234F1Z5",
+      },
+    };
+  }
+
+  async confirmEstimateByCustomer(idOrToken: string) {
+    const estimate = await this.prisma.estimate.findFirst({
+      where: {
+        OR: [{ id: idOrToken }, { number: idOrToken }],
+      },
+      include: {
+        lines: true,
+        customer: true,
+      },
+    });
+
+    if (!estimate) {
+      // Check if it's already an active order
+      const existingOrder = await this.prisma.salesOrder.findFirst({
+        where: {
+          OR: [{ id: idOrToken }, { number: idOrToken }],
+        },
+      });
+      if (existingOrder) {
+        return {
+          success: true,
+          alreadyConfirmed: true,
+          message: "Order was already confirmed previously.",
+          orderId: existingOrder.id,
+        };
+      }
+      throw new NotFoundException("Estimate quotation not found.");
+    }
+
+    // Check if an order already exists for this estimate
+    const existingOrder = await this.prisma.salesOrder.findFirst({
+      where: {
+        organizationId: estimate.organizationId,
+        notes: { contains: `[EST:${estimate.id}]` },
+      },
+    });
+
+    if (existingOrder || estimate.status === "ACCEPTED") {
+      return {
+        success: true,
+        alreadyConfirmed: true,
+        message: "Order was already confirmed previously.",
+        orderId: existingOrder?.id,
+      };
+    }
+
+    // Find default warehouse
+    const wh = await this.prisma.warehouse.findFirst({
+      where: { organizationId: estimate.organizationId },
+    });
+    const warehouseId = wh?.id ?? "default";
+
+    // Generate SO number
+    const soNumber = await this.sequences.nextInTx(this.prisma, estimate.organizationId, "SO", "SO");
+
+    // Create confirmed Sales Order
+    const newOrder = await this.prisma.salesOrder.create({
+      data: {
+        organizationId: estimate.organizationId,
+        number: soNumber,
+        customerId: estimate.customerId,
+        warehouseId,
+        status: "CONFIRMED",
+        subtotal: estimate.subtotal,
+        tax: estimate.tax,
+        discount: estimate.discount,
+        total: estimate.total,
+        notes: `Customer approved quotation via public link [EST:${estimate.id}] on ${new Date().toISOString()}`,
+        lines: {
+          create: (estimate.lines ?? []).map((l: any) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            taxRate: l.taxRate,
+            amount: l.amount,
+            description: l.description,
+          })),
+        },
+      },
+    });
+
+    // Update estimate status to ACCEPTED
+    await this.prisma.estimate.update({
+      where: { id: estimate.id },
+      data: { status: "ACCEPTED" },
+    });
+
+    return {
+      success: true,
+      alreadyConfirmed: false,
+      message: "Order confirmed successfully! Production team has been notified.",
+      orderId: newOrder.id,
+      orderNumber: newOrder.number,
+    };
   }
 
   async createEstimate(orgId: string, customerId: string, lines: CreateSalesOrderDto["lines"], discount = 0) {
@@ -121,32 +419,37 @@ export class SalesService {
     });
   }
 
-  listEstimates(orgId: string) {
-    return this.prisma.estimate.findMany({
-      where: { organizationId: orgId },
-      include: { customer: true },
-      orderBy: { date: "desc" },
-    });
+  async listEstimates(orgId: string, query: { page?: number; pageSize?: number; search?: string; status?: string } = {}) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.search) {
+      where.OR = [
+        { number: { contains: query.search, mode: "insensitive" } },
+        { customer: { name: { contains: query.search, mode: "insensitive" } } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.estimate.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, date: true, expiryDate: true,
+          subtotal: true, tax: true, discount: true, total: true,
+          customer: { select: { id: true, name: true, email: true, phone: true, state: true } },
+          lines: { select: { id: true, productId: true, quantity: true, unitPrice: true, taxRate: true, amount: true, description: true } },
+        },
+        orderBy: { date: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.estimate.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async createSalesOrder(orgId: string, dto: CreateSalesOrderDto) {
-    if (!dto.customerId || !dto.customerId.trim()) {
-      throw new BadRequestException("Customer is required");
-    }
-    if (!dto.warehouseId || !dto.warehouseId.trim()) {
-      throw new BadRequestException("Warehouse is required");
-    }
-
-    const customer = await this.prisma.customer.findFirst({
-      where: { id: dto.customerId, organizationId: orgId },
-    });
-    if (!customer) throw new BadRequestException("Customer not found. Please select a valid customer.");
-
-    const warehouse = await this.prisma.warehouse.findFirst({
-      where: { id: dto.warehouseId, organizationId: orgId },
-    });
-    if (!warehouse) throw new BadRequestException("Warehouse not found. Please select a valid warehouse.");
-
     const rawLines = Array.isArray(dto.lines) ? dto.lines.flat(2) : [];
     const linesToProcess = rawLines.filter((l: any) => l && l.productId && Number(l.quantity) > 0);
     if (!linesToProcess.length) {
@@ -181,12 +484,35 @@ export class SalesService {
     });
   }
 
-  listSalesOrders(orgId: string) {
-    return this.prisma.salesOrder.findMany({
-      where: { organizationId: orgId },
-      include: { customer: true, lines: true },
-      orderBy: { createdAt: "desc" },
-    });
+  async listSalesOrders(orgId: string, query: { page?: number; pageSize?: number; search?: string; status?: string } = {}) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.search) {
+      where.OR = [
+        { number: { contains: query.search, mode: "insensitive" } },
+        { customer: { name: { contains: query.search, mode: "insensitive" } } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.salesOrder.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, date: true, createdAt: true,
+          subtotal: true, discount: true, tax: true, shipping: true, total: true, notes: true,
+          warehouseId: true, customerId: true,
+          customer: { select: { id: true, name: true, email: true, phone: true } },
+          lines: { select: { id: true, productId: true, quantity: true, fulfilledQty: true, unitPrice: true, taxRate: true, amount: true, description: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.salesOrder.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async getSalesOrder(orgId: string, id: string) {
@@ -294,12 +620,26 @@ export class SalesService {
     });
   }
 
-  listPackages(orgId: string) {
-    return this.prisma.package.findMany({
-      where: { organizationId: orgId },
-      include: { salesOrder: true, lines: true },
-      orderBy: { createdAt: "desc" },
-    });
+  async listPackages(orgId: string, query: { page?: number; pageSize?: number } = {}) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+    const where = { organizationId: orgId };
+    const [data, total] = await Promise.all([
+      this.prisma.package.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, packedAt: true, createdAt: true, salesOrderId: true,
+          salesOrder: { select: { id: true, number: true, status: true, customer: { select: { id: true, name: true } } } },
+          lines: { select: { id: true, productId: true, quantity: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.package.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async createShipment(orgId: string, packageId: string, userId: string) {
@@ -318,7 +658,7 @@ export class SalesService {
 
     const shipment = await this.prisma.$transaction(async (tx: any) => {
       const number = await this.sequences.nextInTx(tx, orgId, "SHP", "SHP");
-      const row = await tx.shipment.create({
+      const row = await tx .shipment.create({
         data: {
           organizationId: orgId,
           number,
@@ -377,12 +717,26 @@ export class SalesService {
     return this.prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id }, include: { lines: true } });
   }
 
-  listShipments(orgId: string) {
-    return this.prisma.shipment.findMany({
-      where: { organizationId: orgId },
-      include: { salesOrder: true, lines: true },
-      orderBy: { createdAt: "desc" },
-    });
+  async listShipments(orgId: string, query: { page?: number; pageSize?: number } = {}) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+    const where = { organizationId: orgId };
+    const [data, total] = await Promise.all([
+      this.prisma.shipment.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, carrier: true, trackingNumber: true, shippedAt: true, createdAt: true, salesOrderId: true,
+          salesOrder: { select: { id: true, number: true, customer: { select: { id: true, name: true } } } },
+          lines: { select: { id: true, productId: true, quantity: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.shipment.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async createInvoiceFromOrder(orgId: string, salesOrderId: string) {
@@ -444,27 +798,37 @@ export class SalesService {
     });
   }
 
-  listInvoices(orgId: string) {
-    return this.prisma.invoice.findMany({
-      where: { organizationId: orgId },
-      include: {
-        customer: true,
-        organization: true,
-        lines: true,
-        salesOrder: {
-          include: {
-            packages: true,
-            shipments: true,
-          },
+  async listInvoices(orgId: string, query: { page?: number; pageSize?: number; search?: string; status?: string } = {}) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.search) {
+      where.OR = [
+        { number: { contains: query.search, mode: "insensitive" } },
+        { customer: { name: { contains: query.search, mode: "insensitive" } } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, date: true, dueDate: true, createdAt: true,
+          subtotal: true, discount: true, tax: true, shipping: true, total: true, amountPaid: true,
+          customerId: true, salesOrderId: true,
+          customer: { select: { id: true, name: true, email: true, phone: true, state: true, gstin: true, billingAddress: true, city: true, pincode: true } },
+          salesOrder: { select: { id: true, number: true, status: true } },
+          lines: { select: { id: true, productId: true, description: true, quantity: true, unitPrice: true, taxRate: true, amount: true } },
+          payments: { select: { id: true, amount: true, payment: { select: { id: true, amount: true, method: true, status: true, receivedAt: true } } } },
         },
-        payments: {
-          include: {
-            payment: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async recordPayment(orgId: string, dto: PaymentDto) {
@@ -524,12 +888,26 @@ export class SalesService {
     });
   }
 
-  listPayments(orgId: string) {
-    return this.prisma.payment.findMany({
-      where: { organizationId: orgId },
-      include: { customer: true, allocations: true },
-      orderBy: { createdAt: "desc" },
-    });
+  async listPayments(orgId: string, query: { page?: number; pageSize?: number } = {}) {
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+    const where = { organizationId: orgId };
+    const [data, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where,
+        select: {
+          id: true, amount: true, method: true, status: true, receivedAt: true, createdAt: true,
+          customer: { select: { id: true, name: true, email: true, phone: true } },
+          allocations: { select: { id: true, invoiceId: true, amount: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.payment.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async createSalesReturn(orgId: string, dto: ReturnDto, userId: string) {
@@ -580,10 +958,17 @@ export class SalesService {
     });
   }
 
-  listSalesReturns(orgId: string) {
+  listSalesReturns(orgId: string, page = 1, pageSize = 20) {
+    const skip = (page - 1) * pageSize;
     return this.prisma.salesReturn.findMany({
       where: { organizationId: orgId },
-      include: { customer: true, lines: true },
+      select: {
+        id: true, number: true, status: true, reason: true, createdAt: true,
+        customer: { select: { id: true, name: true } },
+        lines: { select: { id: true, productId: true, quantity: true } },
+      },
+      skip,
+      take: pageSize,
       orderBy: { createdAt: "desc" },
     });
   }

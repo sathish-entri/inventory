@@ -48,15 +48,11 @@ export class AuthService {
     const normalizedEmail = dto.email.toLowerCase().trim();
 
     const baseSlug = slugify(dto.organizationName);
-    let slug = baseSlug;
-    let attempts = 0;
-    while (await this.prisma.organization.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${randomBytes(2).toString("hex")}`;
-      if (++attempts > 5) {
-        slug = `${baseSlug}-${randomBytes(4).toString("hex")}`;
-        break;
-      }
-    }
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { slug: baseSlug },
+      select: { id: true },
+    });
+    const slug = existingOrg ? `${baseSlug}-${randomBytes(3).toString("hex")}` : baseSlug;
 
     const result = await this.prisma.$transaction(
       async (tx: any) => {
@@ -98,17 +94,18 @@ export class AuthService {
       },
     });
 
-    try {
-      await this.email.send(
+    // Send email non-blocking to prevent register latency
+    this.email
+      .send(
         normalizedEmail,
         "Verify your Inventra account",
         `<p>Welcome to Inventra! Your verification token is: <strong>${verifyToken}</strong></p>`,
-      );
-    } catch (err: any) {
-      this.logger.warn(`Failed to dispatch verification email to ${normalizedEmail}: ${err.message}`);
-    }
+      )
+      .catch((err: any) => {
+        this.logger.warn(`Failed to dispatch verification email to ${normalizedEmail}: ${err.message}`);
+      });
 
-    return this.issueTokens(result.user.id, result.organization.id, normalizedEmail, meta);
+    return this.issueTokens(result.user.id, result.organization.id, normalizedEmail, meta, PERMISSIONS);
   }
 
   async login(dto: LoginDto, meta?: { ip?: string; userAgent?: string }) {
@@ -118,7 +115,13 @@ export class AuthService {
         email,
         ...(dto.organizationSlug ? { organization: { slug: dto.organizationSlug.toLowerCase().trim() } } : {}),
       },
-      include: { organization: true },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        isActive: true,
+        organizationId: true,
+      },
     });
 
     // Timing mitigation: run dummy compare if no user exists
@@ -349,8 +352,9 @@ export class AuthService {
     organizationId: string,
     email: string,
     meta?: { ip?: string; userAgent?: string },
+    cachedPermissions?: string[] | readonly string[],
   ) {
-    const permissions = await this.loadPermissions(userId);
+    const permissions = cachedPermissions ?? (await this.loadPermissions(userId));
     const accessToken = await this.jwt.signAsync(
       { sub: userId, orgId: organizationId, email, permissions },
       {
@@ -383,7 +387,19 @@ export class AuthService {
   private async loadPermissions(userId: string): Promise<string[]> {
     const roles = await this.prisma.userRole.findMany({
       where: { userId },
-      include: { role: { include: { permissions: { include: { permission: true } } } } },
+      select: {
+        role: {
+          select: {
+            permissions: {
+              select: {
+                permission: {
+                  select: { key: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     return [...new Set(roles.flatMap((r: any) => r.role.permissions.map((p: any) => p.permission.key)))] as string[];
   }
@@ -402,22 +418,23 @@ export class AuthService {
   }
 
   async seedRoles(tx: any, organizationId: string) {
-    const perms = await tx.permission.findMany();
+    const perms = await tx.permission.findMany({ select: { id: true, key: true } });
     const byKey = new Map(perms.map((p: any) => [p.key, p]));
 
-    const createdRoles = [];
-    for (const name of ROLES) {
-      const role = await tx.role.upsert({
-        where: { organizationId_name: { organizationId, name } },
-        create: { organizationId, name, isSystem: true },
-        update: {},
-      });
-      createdRoles.push(role);
-    }
+    const createdRoles = await Promise.all(
+      ROLES.map((name) =>
+        tx.role.upsert({
+          where: { organizationId_name: { organizationId, name } },
+          create: { organizationId, name, isSystem: true },
+          update: {},
+        }),
+      ),
+    );
 
     const roleIds = createdRoles.map((r: any) => r.id);
     const existingRPs = await tx.rolePermission.findMany({
       where: { roleId: { in: roleIds } },
+      select: { roleId: true, permissionId: true },
     });
     const existingPairs = new Set(existingRPs.map((rp: any) => `${rp.roleId}:${rp.permissionId}`));
 

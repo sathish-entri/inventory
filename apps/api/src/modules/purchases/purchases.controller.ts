@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import { PurchasesService } from "./purchases.service";
@@ -23,8 +23,8 @@ export class PurchasesController {
 
   @Get("purchase-orders")
   @RequirePermissions("purchase_order:read")
-  list(@CurrentUser() user: AuthUser) {
-    return this.purchases.listPurchaseOrders(user.organizationId);
+  list(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.purchases.listPurchaseOrders(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
   }
 
   @Post("purchase-orders/:id/receive")
@@ -35,8 +35,8 @@ export class PurchasesController {
 
   @Get("purchase-receives")
   @RequirePermissions("purchase_receive:read")
-  receives(@CurrentUser() user: AuthUser) {
-    return this.purchases.listReceives(user.organizationId);
+  receives(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.purchases.listReceives(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
   }
 
   @Post("bills/from-order/:purchaseOrderId")
@@ -47,8 +47,8 @@ export class PurchasesController {
 
   @Get("bills")
   @RequirePermissions("bill:read")
-  bills(@CurrentUser() user: AuthUser) {
-    return this.purchases.listBills(user.organizationId);
+  bills(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string, @Query("status") status?: string) {
+    return this.purchases.listBills(user.organizationId, Number(page) || 1, Number(pageSize) || 50, status);
   }
 
   @Post("bills/:id/pay")
@@ -65,7 +65,7 @@ export class PurchasesController {
 
   @Get("purchase-returns")
   @RequirePermissions("return:read")
-  listReturns(@CurrentUser() user: AuthUser) {
-    return this.purchases.listPurchaseReturns(user.organizationId);
+  listReturns(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    return this.purchases.listPurchaseReturns(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
   }
 }

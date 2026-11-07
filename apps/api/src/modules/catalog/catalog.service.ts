@@ -1,8 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { paginateMeta, PaginationQueryDto } from "../../common/pagination";
-import { CreateProductDto, CreateWarehouseDto, NameDto, UnitDto } from "./dto";
+import { CreateProductDto, CreateWarehouseDto, NameDto, UnitDto, ProductQueryDto, UpdateProductDto } from "./dto";
 
 @Injectable()
 export class CatalogService {
@@ -76,7 +76,8 @@ export class CatalogService {
             sku: dto.sku,
             barcode: dto.barcode,
             description: dto.description,
-            type: dto.type ?? "BASIC",
+            type: dto.type ?? (dto.components?.length ? "COMPOSITE" : "BASIC"),
+            classification: (dto.classification as any) ?? "FINISHED_GOOD",
             categoryId: dto.categoryId,
             brandId: dto.brandId,
             unitId: dto.unitId,
@@ -88,18 +89,24 @@ export class CatalogService {
             trackInventory: dto.trackInventory ?? true,
           },
         });
-        if (dto.type === "COMPOSITE" && dto.components?.length) {
+        if (dto.components?.length) {
           await tx.productComponent.createMany({
             data: dto.components.map((c: any) => ({
               parentProductId: product.id,
               childProductId: c.childProductId,
-              quantity: c.quantity,
+              quantity: Number(c.quantity),
             })),
           });
         }
         return tx.product.findUniqueOrThrow({
           where: { id: product.id },
-          include: { components: true, category: true, brand: true, unit: true, images: true },
+          include: {
+            components: { include: { child: true } },
+            category: true,
+            brand: true,
+            unit: true,
+            images: true,
+          },
         });
       });
     } catch (e: any) {
@@ -137,9 +144,16 @@ export class CatalogService {
     return { count: createdList.length, products: createdList };
   }
 
-  async listProducts(organizationId: string, query: PaginationQueryDto) {
+  async listProducts(organizationId: string, query: ProductQueryDto) {
     const where: Prisma.ProductWhereInput = {
       organizationId,
+      ...(query.classification
+        ? {
+            classification: query.classification.includes(",")
+              ? { in: query.classification.split(",").map((s) => s.trim()) as any }
+              : (query.classification.trim() as any),
+          }
+        : {}),
       ...(query.search
         ? {
             OR: [
@@ -154,7 +168,17 @@ export class CatalogService {
       this.prisma.product.count({ where }),
       this.prisma.product.findMany({
         where,
-        include: { category: true, brand: true, unit: true, stocks: true },
+        include: {
+          category: true,
+          brand: true,
+          unit: true,
+          stocks: true,
+          components: {
+            include: {
+              child: true,
+            },
+          },
+        },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
         orderBy: { createdAt: "desc" },
@@ -166,16 +190,33 @@ export class CatalogService {
   async getProduct(organizationId: string, id: string) {
     const row = await this.prisma.product.findFirst({
       where: { id, organizationId },
-      include: { components: true, category: true, brand: true, unit: true, images: true, stocks: true },
+      include: {
+        components: {
+          include: {
+            child: true,
+          },
+        },
+        category: true,
+        brand: true,
+        unit: true,
+        images: true,
+        stocks: true,
+      },
     });
     if (!row) throw new NotFoundException("Product not found");
     return row;
   }
 
-  async updateProduct(organizationId: string, id: string, dto: Partial<CreateProductDto>) {
+  async updateProduct(organizationId: string, id: string, dto: UpdateProductDto) {
     await this.getProduct(organizationId, id);
     const { components, ...rest } = dto;
-    await this.prisma.product.update({ where: { id }, data: rest });
+    await this.prisma.product.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(components !== undefined ? { type: components.length > 0 ? "COMPOSITE" : (rest.type ?? "BASIC") } : {}),
+      },
+    });
     if (components) {
       await this.prisma.productComponent.deleteMany({ where: { parentProductId: id } });
       if (components.length) {
@@ -183,12 +224,69 @@ export class CatalogService {
           data: components.map((c: any) => ({
             parentProductId: id,
             childProductId: c.childProductId,
-            quantity: c.quantity,
+            quantity: Number(c.quantity),
           })),
         });
       }
     }
     return this.getProduct(organizationId, id);
+  }
+
+  async deleteProduct(organizationId: string, id: string) {
+    const product = await this.getProduct(organizationId, id);
+
+    // Check if this product is used as a component in another product's recipe
+    const usedInRecipes = await this.prisma.productComponent.findMany({
+      where: { childProductId: id },
+      include: { parent: true },
+    });
+    if (usedInRecipes.length > 0) {
+      const parentNames = usedInRecipes.map((r) => r.parent.name).join(", ");
+      throw new BadRequestException(
+        `Cannot delete item: It is used as a component in recipe(s) for [${parentNames}]. Remove it from the recipe first.`,
+      );
+    }
+
+    // Check if this item has any transaction / order history
+    const [txnCount, soCount, poCount, invCount, billCount, prodRunCount] = await Promise.all([
+      this.prisma.inventoryTransaction.count({ where: { organizationId, productId: id } }),
+      this.prisma.salesOrderLine.count({ where: { productId: id } }),
+      this.prisma.purchaseOrderLine.count({ where: { productId: id } }),
+      this.prisma.invoiceLine.count({ where: { productId: id } }),
+      this.prisma.billLine.count({ where: { productId: id } }),
+      this.prisma.productionRun.count({ where: { organizationId, productId: id } }),
+    ]);
+
+    const totalUsage = txnCount + soCount + poCount + invCount + billCount + prodRunCount;
+
+    if (totalUsage > 0) {
+      // Safe Archive / Deactivate to preserve historical integrity
+      await this.prisma.product.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      return {
+        success: true,
+        deleted: false,
+        archived: true,
+        message: `Item has ${totalUsage} historical transaction(s) (orders/stock/production). It was deactivated (archived) to preserve audit and accounting ledgers.`,
+      };
+    }
+
+    // Zero usage -> Clean hard delete
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productComponent.deleteMany({ where: { parentProductId: id } });
+      await tx.inventoryStock.deleteMany({ where: { productId: id } });
+      await tx.productImage.deleteMany({ where: { productId: id } });
+      await tx.product.delete({ where: { id } });
+    });
+
+    return {
+      success: true,
+      deleted: true,
+      archived: false,
+      message: `Item "${product.name}" deleted permanently.`,
+    };
   }
 
   createCustomer(organizationId: string, data: any) {

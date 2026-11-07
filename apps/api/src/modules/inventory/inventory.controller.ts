@@ -7,7 +7,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { CurrentUser, type AuthUser } from "../../common/current-user.decorator";
 import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
-import { AdjustStockDto, CreateBatchDto, CreateSerialDto, OpeningStockDto, TransferDto } from "../catalog/dto";
+import { AdjustStockDto, CreateBatchDto, CreateSerialDto, OpeningStockDto, TransferDto, ProduceGoodsDto, DailyProductionLogDto } from "../catalog/dto";
 
 @ApiTags("inventory")
 @ApiBearerAuth()
@@ -57,19 +57,8 @@ export class InventoryController {
 
   @Post("inventory/adjustments")
   @RequirePermissions("inventory:adjust")
-  async adjust(@CurrentUser() user: AuthUser, @Body() dto: AdjustStockDto) {
-    const adj = await this.prisma.stockAdjustment.create({
-      data: {
-        organizationId: user.organizationId,
-        warehouseId: dto.warehouseId,
-        productId: dto.productId,
-        quantityDelta: dto.quantityDelta,
-        reason: dto.reason,
-        notes: dto.notes,
-        createdById: user.id,
-      },
-    });
-    await this.inventory.adjust(
+  adjust(@CurrentUser() user: AuthUser, @Body() dto: AdjustStockDto) {
+    return this.inventory.adjust(
       user.organizationId,
       dto.warehouseId,
       dto.productId,
@@ -78,53 +67,52 @@ export class InventoryController {
       user.id,
       dto.notes,
     );
-    return adj;
   }
 
   @Get("inventory/adjustments")
   @RequirePermissions("inventory:read")
-  listAdjustments(@CurrentUser() user: AuthUser) {
+  listAdjustments(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    const p = Number(page) || 1;
+    const ps = Number(pageSize) || 50;
     return this.prisma.stockAdjustment.findMany({
       where: { organizationId: user.organizationId },
       orderBy: { createdAt: "desc" },
+      skip: (p - 1) * ps,
+      take: ps,
     });
   }
 
   @Post("inventory/transfers")
   @RequirePermissions("inventory:transfer")
-  async transfer(@CurrentUser() user: AuthUser, @Body() dto: TransferDto) {
-    const number = await this.sequences.nextInTx(this.prisma, user.organizationId, "TRF", "TRF");
-    const transfer = await this.prisma.stockTransfer.create({
-      data: {
-        organizationId: user.organizationId,
-        number,
-        fromWarehouseId: dto.fromWarehouseId,
-        toWarehouseId: dto.toWarehouseId,
-        status: "COMPLETED",
-        notes: dto.notes,
-        createdById: user.id,
-        completedAt: new Date(),
-        lines: { create: dto.lines },
-      },
-      include: { lines: true },
-    });
-    await this.inventory.transfer(
+  transfer(@CurrentUser() user: AuthUser, @Body() dto: TransferDto) {
+    return this.inventory.transfer(
       user.organizationId,
       dto.fromWarehouseId,
       dto.toWarehouseId,
       dto.lines,
       user.id,
     );
-    return transfer;
   }
 
   @Get("inventory/transfers")
   @RequirePermissions("inventory:read")
-  listTransfers(@CurrentUser() user: AuthUser) {
+  listTransfers(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
+    const p = Number(page) || 1;
+    const ps = Number(pageSize) || 50;
     return this.prisma.stockTransfer.findMany({
       where: { organizationId: user.organizationId },
-      include: { lines: true },
+      select: {
+        id: true,
+        number: true,
+        fromWarehouseId: true,
+        toWarehouseId: true,
+        status: true,
+        createdAt: true,
+        lines: { select: { id: true, productId: true, quantity: true } },
+      },
       orderBy: { createdAt: "desc" },
+      skip: (p - 1) * ps,
+      take: ps,
     });
   }
 
@@ -205,5 +193,52 @@ export class InventoryController {
   async reorder(@CurrentUser() user: AuthUser) {
     const stocks = await this.inventory.listStock(user.organizationId);
     return stocks.filter((s: any) => s.availableQuantity <= Number(s.product.reorderLevel));
+  }
+
+  @Post("inventory/produce")
+  @RequirePermissions("inventory:adjust")
+  produce(@CurrentUser() user: AuthUser, @Body() dto: ProduceGoodsDto) {
+    return this.inventory.produceGoods(user.organizationId, user.id, dto);
+  }
+
+  @Get("inventory/production-runs")
+  @RequirePermissions("inventory:read")
+  listProductionRuns(
+    @CurrentUser() user: AuthUser,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ) {
+    const p = Number(page) || 1;
+    const ps = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    return this.inventory.listProductionRuns(user.organizationId, p, ps);
+  }
+
+  @Get("inventory/production-feasibility/:productId")
+  @RequirePermissions("inventory:read")
+  getProductionFeasibility(
+    @CurrentUser() user: AuthUser,
+    @Param("productId") productId: string,
+    @Query("warehouseId") warehouseId?: string,
+  ) {
+    return this.inventory.getProductionFeasibility(user.organizationId, productId, warehouseId);
+  }
+
+  @Post("inventory/daily-production-log")
+  @RequirePermissions("inventory:adjust")
+  postDailyProductionLog(@CurrentUser() user: AuthUser, @Body() dto: DailyProductionLogDto) {
+    return this.inventory.postDailyProductionLog(user.organizationId, user.id, dto);
+  }
+
+  @Get("inventory/production-monthly-analytics")
+  @RequirePermissions("inventory:read")
+  getMonthlyProductionAnalytics(
+    @CurrentUser() user: AuthUser,
+    @Query("year") year?: string,
+    @Query("month") month?: string,
+    @Query("warehouseId") warehouseId?: string,
+  ) {
+    const y = Number(year) || new Date().getFullYear();
+    const m = Number(month) || new Date().getMonth() + 1;
+    return this.inventory.getMonthlyProductionAnalytics(user.organizationId, y, m, warehouseId);
   }
 }

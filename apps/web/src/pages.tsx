@@ -34,6 +34,12 @@ import {
   Building2, UserCog, ClipboardList,
   Archive, ArrowLeftRight, Box, Receipt, RotateCcw,
   Trash2, GripVertical, Kanban, List, Sparkles, Calculator, Printer, Filter, MapPin, Compass, Navigation, Map,
+  Pencil,
+  HelpCircle,
+  BookOpen,
+  Calendar,
+  Minus,
+  LayoutGrid,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────
@@ -71,6 +77,25 @@ function ToastProvider({ children }: { children: ReactNode }) {
     </ToastContext.Provider>
   );
 }
+
+// ─────────────────────────────────────────────────────────
+// PUBLIC LIVE APPLICATION URL HELPER
+// ─────────────────────────────────────────────────────────
+export const getPublicAppUrl = (): string => {
+  const envUrl = (import.meta.env.VITE_APP_URL || "").trim();
+  if (envUrl && envUrl !== "undefined" && envUrl.startsWith("http")) {
+    return envUrl.replace(/\/$/, "");
+  }
+  if (
+    typeof window !== "undefined" &&
+    window.location?.origin &&
+    !window.location.origin.includes("localhost") &&
+    !window.location.origin.includes("127.0.0.1")
+  ) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return "https://inventra-web.onrender.com";
+};
 
 // ─────────────────────────────────────────────────────────
 // GUARD
@@ -358,8 +383,19 @@ type SearchableSelectProps = {
   value: string;
   onChange: (val: string) => void;
   placeholder?: string;
+  onQuickCreate?: () => void;
+  quickCreateLabel?: string;
+  manageUrl?: string;
 };
-export function SearchableSelect({ options, value, onChange, placeholder = "Select option..." }: SearchableSelectProps) {
+export function SearchableSelect({
+  options,
+  value,
+  onChange,
+  placeholder = "Select option...",
+  onQuickCreate,
+  quickCreateLabel,
+  manageUrl,
+}: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -416,7 +452,7 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
             borderRadius: 8,
             boxShadow: "0 10px 25px rgba(0,0,0,0.12)",
             zIndex: 9999,
-            maxHeight: 220,
+            maxHeight: 260,
             overflowY: "auto",
             padding: 6,
           }}
@@ -433,8 +469,23 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
             />
           </div>
           {filtered.length === 0 ? (
-            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
+            <div style={{ padding: "12px", fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
               No matches found
+              {onQuickCreate && (
+                <div style={{ marginTop: 6 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    style={{ fontSize: 11, padding: "4px 10px" }}
+                    onClick={() => {
+                      setOpen(false);
+                      onQuickCreate();
+                    }}
+                  >
+                    <Plus size={12} /> {quickCreateLabel || "Create New"}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             filtered.map((opt) => (
@@ -462,7 +513,673 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
               </div>
             ))
           )}
+
+          {/* Quick Create Action Footer */}
+          {onQuickCreate && (
+            <div
+              style={{
+                marginTop: 6,
+                padding: "8px 10px",
+                borderTop: "1px solid var(--border)",
+                background: "#f8fafc",
+                borderRadius: "0 0 6px 6px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ fontSize: 12, color: "var(--accent)", padding: "2px 6px", fontWeight: 700 }}
+                onClick={() => {
+                  setOpen(false);
+                  onQuickCreate();
+                }}
+              >
+                <Plus size={13} /> {quickCreateLabel || "Add New Option"}
+              </button>
+              {manageUrl && (
+                <a
+                  href={manageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: "var(--text-muted)", textDecoration: "none" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Manage ↗
+                </a>
+              )}
+            </div>
+          )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// QUICK CREATE MODALS (INLINE CREATION WITHOUT LEAVING FORM)
+// ─────────────────────────────────────────────────────────
+
+export function QuickCreateWarehouseModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (wh: any) => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ name: "", code: "", city: "" });
+
+  const create = useMutation({
+    mutationFn: () => {
+      const code = form.code.trim() || `WH-${Date.now().toString().slice(-4)}`;
+      return api.post("/warehouses", { ...form, code });
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["wh"] });
+      toast(`Warehouse "${form.name}" created and selected!`);
+      onCreated(res.data);
+      onClose();
+      setForm({ name: "", code: "", city: "" });
+    },
+    onError: (err: any) => toast(err.response?.data?.message ?? "Could not create warehouse", "error"),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="⚡ Quick Add Warehouse"
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={create.isPending || !form.name.trim()}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />} Save & Select
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
+          Create a new warehouse location instantly without leaving your current work.
+        </p>
+        <InputGroup label="Warehouse Name *">
+          <input
+            className="input-field"
+            placeholder="e.g. Central Hub, Tiruppur Unit"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            autoFocus
+            required
+          />
+        </InputGroup>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <InputGroup label="Warehouse Code (Optional)">
+            <input
+              className="input-field"
+              placeholder="e.g. WH-01"
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+            />
+          </InputGroup>
+          <InputGroup label="City / Location">
+            <input
+              className="input-field"
+              placeholder="e.g. Coimbatore"
+              value={form.city}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+            />
+          </InputGroup>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function QuickCreateCustomerModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (c: any) => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ name: "", email: "", phone: "", city: "", state: "Tamil Nadu" });
+
+  const create = useMutation({
+    mutationFn: () => api.post("/customers", form),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      toast(`Customer "${form.name}" added and selected!`);
+      onCreated(res.data);
+      onClose();
+      setForm({ name: "", email: "", phone: "", city: "", state: "Tamil Nadu" });
+    },
+    onError: (err: any) => toast(err.response?.data?.message ?? "Could not add customer", "error"),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="⚡ Quick Add Customer"
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={create.isPending || !form.name.trim()}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />} Save & Select
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <InputGroup label="Customer / Company Name *">
+          <input
+            className="input-field"
+            placeholder="e.g. Apex Engineering Ltd"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            autoFocus
+            required
+          />
+        </InputGroup>
+        <InputGroup label="Email Address (for Quotation & Tracking)">
+          <input
+            type="email"
+            className="input-field"
+            placeholder="e.g. purchase@apexengineering.com"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </InputGroup>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <InputGroup label="Phone / WhatsApp Number">
+            <input
+              className="input-field"
+              placeholder="+91 9876543210"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </InputGroup>
+          <InputGroup label="City">
+            <input
+              className="input-field"
+              placeholder="e.g. Coimbatore"
+              value={form.city}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+            />
+          </InputGroup>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function QuickCreateVendorModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (v: any) => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ name: "", phone: "", city: "" });
+
+  const create = useMutation({
+    mutationFn: () => api.post("/vendors", form),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["vendors"] });
+      toast(`Vendor "${form.name}" added and selected!`);
+      onCreated(res.data);
+      onClose();
+      setForm({ name: "", phone: "", city: "" });
+    },
+    onError: (err: any) => toast(err.response?.data?.message ?? "Could not add vendor", "error"),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="⚡ Quick Add Vendor"
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={create.isPending || !form.name.trim()}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />} Save & Select
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <InputGroup label="Vendor / Supplier Name *">
+          <input
+            className="input-field"
+            placeholder="e.g. Metal Supplies India"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            autoFocus
+            required
+          />
+        </InputGroup>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <InputGroup label="Phone Number">
+            <input
+              className="input-field"
+              placeholder="+91 9876543210"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </InputGroup>
+          <InputGroup label="City">
+            <input
+              className="input-field"
+              placeholder="e.g. Tiruppur"
+              value={form.city}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+            />
+          </InputGroup>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function QuickCreateProductModal({
+  open,
+  onClose,
+  onCreated,
+  defaultClassification = "FINISHED_GOOD",
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (p: any) => void;
+  defaultClassification?: "RAW_MATERIAL" | "CONSUMABLE" | "FINISHED_GOOD";
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    name: "",
+    sku: "",
+    unit: "kg",
+    sellingPrice: "0",
+    costPrice: "0",
+    taxRate: "18",
+    classification: defaultClassification,
+  });
+
+  const [bulkHelperOpen, setBulkHelperOpen] = useState(false);
+  const [bulkAmount, setBulkAmount] = useState("");
+  const [bulkQty, setBulkQty] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setForm((p) => ({
+        ...p,
+        classification: defaultClassification,
+        unit: defaultClassification === "FINISHED_GOOD" ? "box" : "kg",
+        sellingPrice: "0",
+        costPrice: "0",
+      }));
+      setBulkHelperOpen(false);
+      setBulkAmount("");
+      setBulkQty("");
+    }
+  }, [open, defaultClassification]);
+
+  const isRawOrConsumable = form.classification === "RAW_MATERIAL" || form.classification === "CONSUMABLE";
+
+  // Auto-calculate unit cost from bulk purchase helper
+  const handleApplyBulkCost = () => {
+    const amt = Number(bulkAmount);
+    const qty = Number(bulkQty);
+    if (amt > 0 && qty > 0) {
+      const perUnit = Number((amt / qty).toFixed(2));
+      setForm((p) => ({ ...p, costPrice: String(perUnit) }));
+      toast(`Calculated: ₹${perUnit} per ${form.unit}`);
+      setBulkHelperOpen(false);
+    }
+  };
+
+  const create = useMutation({
+    mutationFn: () => {
+      const sku = form.sku.trim() || `SKU-${Date.now().toString().slice(-5)}`;
+      return api.post("/products", {
+        name: form.name.trim(),
+        sku,
+        description: `Unit: ${form.unit}`,
+        sellingPrice: isRawOrConsumable ? 0 : (Number(form.sellingPrice) || 0),
+        costPrice: Number(form.costPrice) || 0,
+        taxRate: Number(form.taxRate) || 18,
+        classification: form.classification,
+      });
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast(`Item "${form.name}" created and selected!`);
+      onCreated(res.data);
+      onClose();
+      setForm({ name: "", sku: "", unit: "kg", sellingPrice: "0", costPrice: "0", taxRate: "18", classification: defaultClassification });
+    },
+    onError: (err: any) => toast(err.response?.data?.message ?? "Could not add item", "error"),
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="⚡ Quick Add Item / Product"
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={create.isPending || !form.name.trim()}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />} Save & Select
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <InputGroup label="Factory Item Classification *">
+          <select
+            className="input-field"
+            value={form.classification}
+            onChange={(e) => {
+              const cls = e.target.value as any;
+              setForm({
+                ...form,
+                classification: cls,
+                unit: cls === "FINISHED_GOOD" ? "box" : cls === "CONSUMABLE" ? "cylinder" : "kg",
+              });
+            }}
+            style={{ fontWeight: 600, background: isRawOrConsumable ? "#fff7ed" : "#eff6ff" }}
+          >
+            <option value="FINISHED_GOOD">📦 Finished Good (Autoflex / Produced in factory for sale)</option>
+            <option value="RAW_MATERIAL">🏭 Raw Material (Wire rods, wood, chemicals bought from vendor)</option>
+            <option value="CONSUMABLE">⚡ Consumable (Gas cylinders, fluxes, packing boxes)</option>
+          </select>
+        </InputGroup>
+
+        <InputGroup label="Item Name *">
+          <input
+            className="input-field"
+            placeholder={isRawOrConsumable ? "e.g. Raw Wire Rod 3mm or Argon Gas" : "e.g. Autoflex Welding Material Box"}
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            autoFocus
+            required
+          />
+        </InputGroup>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <InputGroup label="SKU (Auto if empty)">
+            <input
+              className="input-field"
+              placeholder="e.g. AF-101"
+              value={form.sku}
+              onChange={(e) => setForm({ ...form, sku: e.target.value })}
+            />
+          </InputGroup>
+
+          <InputGroup label="Unit of Measurement *">
+            <select
+              className="input-field"
+              value={form.unit}
+              onChange={(e) => setForm({ ...form, unit: e.target.value })}
+            >
+              {isRawOrConsumable ? (
+                <>
+                  <option value="kg">kg (Kilograms)</option>
+                  <option value="cylinder">Cylinder / Can</option>
+                  <option value="liter">Liters</option>
+                  <option value="ton">Ton (1000 kg)</option>
+                  <option value="grams">Grams</option>
+                  <option value="meter">Meters</option>
+                  <option value="box">Boxes / Cartons</option>
+                  <option value="nos">Pieces / Nos</option>
+                </>
+              ) : (
+                <>
+                  <option value="box">Boxes / Cartons</option>
+                  <option value="pack">Packs / Packets</option>
+                  <option value="nos">Pieces / Nos</option>
+                  <option value="sets">Sets</option>
+                  <option value="units">Units</option>
+                </>
+              )}
+            </select>
+          </InputGroup>
+        </div>
+
+        {/* Dynamic Pricing Fields */}
+        {isRawOrConsumable ? (
+          <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>
+                Cost Price (per {form.unit}) *
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: 11, color: "var(--accent)", padding: "0 4px" }}
+                onClick={() => setBulkHelperOpen(!bulkHelperOpen)}
+              >
+                {bulkHelperOpen ? "Close Calculator" : "⚡ Calculate from Bulk Bill"}
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>₹</span>
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                step="any"
+                placeholder={`Rate per 1 ${form.unit}`}
+                value={form.costPrice}
+                onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+              />
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>/ {form.unit}</span>
+            </div>
+
+            {bulkHelperOpen && (
+              <div style={{ marginTop: 10, padding: 10, background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 6 }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
+                  Supplier bill-la irukkum Total Amount & Qty enter pannunga (e.g. ₹3250 for 50 kg):
+                </span>
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.2fr auto", gap: 8, alignItems: "center" }}>
+                  <input
+                    className="input-field"
+                    type="number"
+                    placeholder="Total ₹ Bill (e.g. 3250)"
+                    value={bulkAmount}
+                    onChange={(e) => setBulkAmount(e.target.value)}
+                  />
+                  <input
+                    className="input-field"
+                    type="number"
+                    placeholder={`Total ${form.unit} (e.g. 50)`}
+                    value={bulkQty}
+                    onChange={(e) => setBulkQty(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleApplyBulkCost}
+                    disabled={!Number(bulkAmount) || !Number(bulkQty)}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <InputGroup label="Selling Price (₹) *">
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                placeholder="Rate to customer"
+                value={form.sellingPrice}
+                onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
+                required
+              />
+            </InputGroup>
+            <InputGroup label="Cost Price (₹, Optional)">
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                placeholder="Auto from BOM recipe"
+                value={form.costPrice}
+                onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+              />
+            </InputGroup>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// SMART ENTITY SELECTOR WITH INLINE QUICK CREATE & NAVIGATION
+// ─────────────────────────────────────────────────────────
+export function SmartEntitySelect({
+  label,
+  entity,
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  entity: "warehouse" | "customer" | "vendor" | "product";
+  options: SelectOption[];
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const entityConfig = {
+    warehouse: {
+      createLabel: "+ New Warehouse",
+      manageUrl: "/warehouses",
+      title: "Warehouse",
+    },
+    customer: {
+      createLabel: "+ New Customer",
+      manageUrl: "/customers",
+      title: "Customer",
+    },
+    vendor: {
+      createLabel: "+ New Vendor",
+      manageUrl: "/vendors",
+      title: "Vendor",
+    },
+    product: {
+      createLabel: "+ New Product",
+      manageUrl: "/products",
+      title: "Product",
+    },
+  }[entity];
+
+  return (
+    <div className="input-group">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <label className="input-label" style={{ margin: 0 }}>{label}</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            style={{ fontSize: 11, padding: "1px 6px", color: "var(--accent)", fontWeight: 700 }}
+            onClick={() => setModalOpen(true)}
+            title={`Quickly create a new ${entityConfig.title} without leaving this form`}
+          >
+            ⚡ {entityConfig.createLabel}
+          </button>
+          <a
+            href={entityConfig.manageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: 11, color: "var(--text-muted)", textDecoration: "none" }}
+            title={`Open full ${entityConfig.title} page in new tab`}
+          >
+            Page ↗
+          </a>
+        </div>
+      </div>
+
+      <SearchableSelect
+        options={options}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder || `Select ${entityConfig.title.toLowerCase()}...`}
+        onQuickCreate={() => setModalOpen(true)}
+        quickCreateLabel={entityConfig.createLabel}
+        manageUrl={entityConfig.manageUrl}
+      />
+
+      {entity === "warehouse" && (
+        <QuickCreateWarehouseModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onCreated={(newItem) => onChange(newItem.id)}
+        />
+      )}
+      {entity === "customer" && (
+        <QuickCreateCustomerModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onCreated={(newItem) => onChange(newItem.id)}
+        />
+      )}
+      {entity === "vendor" && (
+        <QuickCreateVendorModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onCreated={(newItem) => onChange(newItem.id)}
+        />
+      )}
+      {entity === "product" && (
+        <QuickCreateProductModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onCreated={(newItem) => onChange(newItem.id)}
+        />
       )}
     </div>
   );
@@ -471,53 +1188,199 @@ export function SearchableSelect({ options, value, onChange, placeholder = "Sele
 // ─────────────────────────────────────────────────────────
 // REUSABLE NUMBER STEPPER (QUANTITY INPUT)
 // ─────────────────────────────────────────────────────────
-type NumberStepperProps = {
+export type NumberStepperProps = {
   value: number | string;
   onChange: (val: number) => void;
   min?: number;
   max?: number;
   step?: number;
+  unit?: string;
+  prefix?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  size?: "sm" | "md" | "lg";
+  quickAdd?: number[];
   style?: React.CSSProperties;
+  className?: string;
 };
-export function NumberStepper({ value, onChange, min = 0, max, step = 1, style }: NumberStepperProps) {
-  const current = Number(value || 0);
 
-  const dec = () => {
-    const next = current - step;
-    if (min !== undefined && next < min) return;
+export function NumberStepper({
+  value,
+  onChange,
+  min = 0,
+  max,
+  step = 1,
+  unit,
+  prefix,
+  placeholder = "0",
+  disabled = false,
+  size = "md",
+  quickAdd,
+  style,
+  className = "",
+}: NumberStepperProps) {
+  const numVal = value === "" || isNaN(Number(value)) ? 0 : Number(value);
+
+  const handleStep = (delta: number) => {
+    if (disabled) return;
+    const precision = step.toString().split(".")[1]?.length ?? 0;
+    let next = Number((numVal + delta).toFixed(Math.max(precision, 2)));
+    if (min !== undefined && next < min) next = min;
+    if (max !== undefined && next > max) next = max;
     onChange(next);
   };
 
-  const inc = () => {
-    const next = current + step;
-    if (max !== undefined && next > max) return;
-    onChange(next);
-  };
+  const btnSize = size === "sm" ? 28 : size === "lg" ? 40 : 34;
+  const fontSize = size === "sm" ? 12 : size === "lg" ? 16 : 14;
 
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", background: "#fff", ...style }}>
-      <button
-        type="button"
-        style={{ border: "none", background: "#f8fafc", padding: "6px 10px", cursor: "pointer", fontSize: 14, fontWeight: 700, borderRight: "1px solid var(--border)", color: "var(--text-secondary)" }}
-        onClick={dec}
+    <div style={{ display: "inline-flex", flexDirection: "column", gap: 4, ...style }}>
+      <div
+        className={`number-stepper-wrap ${className}`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          background: disabled ? "#f8fafc" : "#ffffff",
+          border: "1.5px solid #cbd5e1",
+          borderRadius: 8,
+          overflow: "hidden",
+          transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+          height: btnSize,
+        }}
       >
-        -
-      </button>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        style={{ width: 60, border: "none", textAlign: "center", fontSize: 13, fontWeight: 600, padding: "4px 0" }}
-        min={min}
-        max={max}
-      />
-      <button
-        type="button"
-        style={{ border: "none", background: "#f8fafc", padding: "6px 10px", cursor: "pointer", fontSize: 14, fontWeight: 700, borderLeft: "1px solid var(--border)", color: "var(--text-secondary)" }}
-        onClick={inc}
-      >
-        +
-      </button>
+        <button
+          type="button"
+          disabled={disabled || (min !== undefined && numVal <= min)}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStep(-step);
+          }}
+          style={{
+            width: btnSize,
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f8fafc",
+            border: "none",
+            borderRight: "1px solid #e2e8f0",
+            cursor: disabled || (min !== undefined && numVal <= min) ? "not-allowed" : "pointer",
+            color: disabled || (min !== undefined && numVal <= min) ? "#94a3b8" : "#334155",
+            transition: "background 0.15s",
+          }}
+          title="Decrease"
+        >
+          <Minus size={size === "sm" ? 12 : 14} />
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+          {prefix && (
+            <span style={{ fontSize: fontSize - 1, fontWeight: 700, color: "#64748b", paddingLeft: 8 }}>
+              {prefix}
+            </span>
+          )}
+          <input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            disabled={disabled}
+            placeholder={placeholder}
+            style={{
+              width: "100%",
+              minWidth: 50,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              textAlign: "center",
+              fontWeight: 700,
+              fontSize,
+              color: "#0f172a",
+              padding: "0 4px",
+              MozAppearance: "textfield",
+            }}
+            value={value === 0 || value === "0" ? "0" : value || ""}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") {
+                onChange(0);
+              } else {
+                onChange(Number(raw));
+              }
+            }}
+          />
+          {unit && (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#475569",
+                background: "#f1f5f9",
+                padding: "2px 6px",
+                borderRadius: 4,
+                marginRight: 6,
+                whiteSpace: "nowrap",
+                userSelect: "none",
+              }}
+            >
+              {unit}
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          disabled={disabled || (max !== undefined && numVal >= max)}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleStep(step);
+          }}
+          style={{
+            width: btnSize,
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f8fafc",
+            border: "none",
+            borderLeft: "1px solid #e2e8f0",
+            cursor: disabled || (max !== undefined && numVal >= max) ? "not-allowed" : "pointer",
+            color: disabled || (max !== undefined && numVal >= max) ? "#94a3b8" : "#334155",
+            transition: "background 0.15s",
+          }}
+          title="Increase"
+        >
+          <Plus size={size === "sm" ? 12 : 14} />
+        </button>
+      </div>
+
+      {quickAdd && quickAdd.length > 0 && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+          {quickAdd.map((q) => (
+            <button
+              key={q}
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "1px 6px",
+                height: "auto",
+                background: "#f1f5f9",
+                color: "var(--accent)",
+                borderRadius: 4,
+                border: "1px solid #e2e8f0",
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStep(q);
+              }}
+            >
+              +{q}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -541,8 +1404,21 @@ function DataTable<T extends Record<string, unknown>>({
   columns, data = [], loading, error, searchFields, filterKey, filterOptions, emptyIcon, emptyText, onRowClick,
 }: DataTableProps<T>) {
   const [q, setQ] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "grid">(() => (typeof window !== "undefined" && window.innerWidth <= 768 ? "grid" : "table"));
+  const [viewMode, setViewMode] = useState<"table" | "grid">(() => {
+    try {
+      const saved = localStorage.getItem("preferred_view_mode");
+      if (saved === "table" || saved === "grid") return saved;
+    } catch {}
+    return typeof window !== "undefined" && window.innerWidth <= 768 ? "grid" : "table";
+  });
   const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
+
+  const setAndSaveViewMode = (mode: "table" | "grid") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("preferred_view_mode", mode);
+    } catch {}
+  };
 
   // Auto-detect filterKey if not provided (e.g. status, type, role)
   const autoFilterKey = filterKey ?? (data.length > 0 && "status" in data[0] ? ("status" as keyof T) : data.length > 0 && "type" in data[0] ? ("type" as keyof T) : undefined);
@@ -584,13 +1460,27 @@ function DataTable<T extends Record<string, unknown>>({
       </div>
     );
 
+  // Identify special columns for rich grid cards
+  const firstCol = columns[0];
+  const secondCol = columns.length > 1 ? columns[1] : undefined;
+  const statusCol = columns.find(
+    (c) => c.label.toLowerCase().includes("status") || c.key === "status"
+  );
+  const actionCol = columns.find(
+    (c) => c.label.toLowerCase().includes("action")
+  );
+  const dataCols = columns.filter(
+    (c) => c !== firstCol && c !== secondCol && c !== statusCol && c !== actionCol
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Sleek Filter & View Control Bar */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: 12, background: "#ffffff", padding: "12px 16px",
-        borderRadius: 12, border: "1px solid var(--border)", flexWrap: "wrap"
+        borderRadius: 14, border: "1px solid var(--border)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)", flexWrap: "wrap"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 240 }}>
           {searchFields && (
@@ -600,7 +1490,7 @@ function DataTable<T extends Record<string, unknown>>({
                 type="text"
                 placeholder="Search records…"
                 className="input-field"
-                style={{ paddingLeft: 34, fontSize: 13 }}
+                style={{ paddingLeft: 34, fontSize: 13, borderRadius: 8 }}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -612,7 +1502,7 @@ function DataTable<T extends Record<string, unknown>>({
             <div style={{ position: "relative" }}>
               <select
                 className="input-field"
-                style={{ fontSize: 12, fontWeight: 600, cursor: "pointer", paddingRight: 28 }}
+                style={{ fontSize: 12, fontWeight: 600, cursor: "pointer", paddingRight: 28, borderRadius: 8 }}
                 value={selectedFilter}
                 onChange={(e) => setSelectedFilter(e.target.value)}
               >
@@ -627,27 +1517,27 @@ function DataTable<T extends Record<string, unknown>>({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", background: "#f1f5f9", padding: "4px 10px", borderRadius: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", background: "#f1f5f9", padding: "5px 12px", borderRadius: 8 }}>
             {filtered.length} record{filtered.length !== 1 ? "s" : ""}
           </span>
-          <div style={{ display: "flex", background: "#f1f5f9", padding: 3, borderRadius: 8, gap: 2 }}>
+          <div style={{ display: "flex", background: "#f1f5f9", padding: 3, borderRadius: 10, border: "1px solid #e2e8f0", gap: 2 }}>
             <button
               type="button"
               className={`btn btn-sm ${viewMode === "table" ? "btn-primary" : "btn-ghost"}`}
-              style={{ fontSize: 12, padding: "4px 10px" }}
-              onClick={() => setViewMode("table")}
+              style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+              onClick={() => setAndSaveViewMode("table")}
               title="Table View"
             >
-              <List size={14} /> Table
+              <List size={14} /> 📋 Table
             </button>
             <button
               type="button"
               className={`btn btn-sm ${viewMode === "grid" ? "btn-primary" : "btn-ghost"}`}
-              style={{ fontSize: 12, padding: "4px 10px" }}
-              onClick={() => setViewMode("grid")}
+              style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+              onClick={() => setAndSaveViewMode("grid")}
               title="Grid View"
             >
-              <Boxes size={14} /> Grid
+              <LayoutGrid size={14} /> 🔲 Grid
             </button>
           </div>
         </div>
@@ -662,64 +1552,163 @@ function DataTable<T extends Record<string, unknown>>({
           </div>
         </div>
       ) : viewMode === "grid" ? (
-        /* Grid View */
-        <div className="grid-view">
+        /* Rich Responsive Grid Card View */
+        <div
+          className="grid-view"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",
+            gap: 16,
+          }}
+        >
           {filtered.map((row, i) => {
-            const firstCol = columns[0];
-            const secondCol = columns[1];
-            const otherCols = columns.slice(2);
+            const rawTitle = firstCol?.render ? firstCol.render(row) : String(row[firstCol?.key as keyof T] ?? "—");
+            const rawSub = secondCol ? (secondCol.render ? secondCol.render(row) : String(row[secondCol.key as keyof T] ?? "—")) : null;
+            const letter = String(row[firstCol?.key as keyof T] || "P").slice(0, 1).toUpperCase();
+
+            // Distinct gradient avatar colors
+            const palette = [
+              "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+              "linear-gradient(135deg, #10b981 0%, #047857 100%)",
+              "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)",
+              "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+              "linear-gradient(135deg, #ec4899 0%, #be185d 100%)",
+            ];
+            const bgGrad = palette[i % palette.length];
 
             return (
               <div
                 key={i}
                 className="grid-card"
-                style={{ cursor: onRowClick ? "pointer" : "default" }}
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 14,
+                  padding: "16px 18px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+                  cursor: onRowClick ? "pointer" : "default",
+                }}
                 onClick={() => onRowClick?.(row)}
               >
-                <div className="grid-card-header">
-                  <div>
-                    <div className="grid-card-title">
-                      {firstCol?.render ? firstCol.render(row) : String(row[firstCol?.key as keyof T] ?? "—")}
+                <div>
+                  {/* Card Header: Avatar + Title + Status */}
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 10,
+                          background: bgGrad,
+                          color: "#ffffff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 800,
+                          fontSize: 15,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {letter}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "var(--text-primary)",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {rawTitle}
+                        </div>
+                        {rawSub && (
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                            {rawSub}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {secondCol && (
-                      <div className="grid-card-sub">
-                        {secondCol.render ? secondCol.render(row) : String(row[secondCol.key as keyof T] ?? "—")}
+
+                    {statusCol && (
+                      <div style={{ flexShrink: 0 }}>
+                        {statusCol.render ? statusCol.render(row) : String(row[statusCol.key as keyof T] ?? "")}
                       </div>
                     )}
                   </div>
-                </div>
 
-                <div className="grid-card-body">
-                  {otherCols.map((c) => (
-                    <div key={c.label} className="grid-card-row" style={{ justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
-                        {c.label}:
-                      </span>
-                      <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                        {c.render ? c.render(row) : String(row[c.key as keyof T] ?? "—")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {onRowClick && (
-                  <div className="grid-card-footer">
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent)" }}>View details</span>
-                    <ChevronRight size={14} color="var(--accent)" />
+                  {/* Card Middle: Key-Value Field Rows */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, margin: "12px 0 6px" }}>
+                    {dataCols.map((c) => {
+                      const val = c.render ? c.render(row) : String(row[c.key as keyof T] ?? "—");
+                      return (
+                        <div
+                          key={c.label}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "4px 0",
+                            borderBottom: "1px dashed #f1f5f9",
+                            fontSize: 12,
+                          }}
+                        >
+                          <span style={{ fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", fontSize: 11 }}>
+                            {c.label}
+                          </span>
+                          <span style={{ fontWeight: 600, color: "var(--text-primary)", textAlign: "right" }}>
+                            {val}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+
+                {/* Card Footer: Actions or Click prompt */}
+                <div
+                  style={{
+                    paddingTop: 10,
+                    borderTop: "1px solid #f1f5f9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    marginTop: 4,
+                  }}
+                >
+                  {actionCol ? (
+                    <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
+                      {actionCol.render ? actionCol.render(row) : null}
+                    </div>
+                  ) : onRowClick ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>View details</span>
+                      <ChevronRight size={14} color="var(--accent)" />
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Record #{i + 1}</span>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
       ) : (
-        /* Table View */
-        <div className="data-table-wrap" style={{ background: "#fff", borderRadius: 12, border: "1px solid var(--border)" }}>
-          <table className="data-table">
+        /* Rich Responsive Table View */
+        <div className="data-table-wrap" style={{ background: "#fff", borderRadius: 14, border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.03)" }}>
+          <table className="data-table" style={{ width: "100%" }}>
             <thead>
-              <tr>
+              <tr style={{ background: "#f8fafc" }}>
                 {columns.map((c) => (
-                  <th key={c.label} style={{ textAlign: c.align ?? "left" }}>
+                  <th key={c.label} style={{ textAlign: c.align ?? "left", padding: "12px 16px" }}>
                     {c.label}
                   </th>
                 ))}
@@ -729,11 +1718,11 @@ function DataTable<T extends Record<string, unknown>>({
               {filtered.map((row, i) => (
                 <tr
                   key={i}
-                  style={{ cursor: onRowClick ? "pointer" : "default" }}
+                  style={{ cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
                   onClick={() => onRowClick?.(row)}
                 >
                   {columns.map((c) => (
-                    <td key={c.label} style={{ textAlign: c.align ?? "left" }}>
+                    <td key={c.label} style={{ textAlign: c.align ?? "left", padding: "12px 16px" }}>
                       {c.render ? c.render(row) : String(row[c.key as keyof T] ?? "—")}
                     </td>
                   ))}
@@ -757,14 +1746,97 @@ function useList<T>(key: string, path: string) {
   });
 }
 
+function InfoTooltip({ text, align = "right" }: { text: string; align?: "left" | "right" | "center" }) {
+  const [open, setOpen] = useState(false);
+  const posStyle: React.CSSProperties =
+    align === "left"
+      ? { left: 0 }
+      : align === "center"
+      ? { left: "50%", transform: "translateX(-50%)" }
+      : { right: 0 };
+
+  return (
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      <button
+        type="button"
+        style={{
+          width: 20,
+          height: 20,
+          padding: 0,
+          borderRadius: "50%",
+          border: "none",
+          background: open ? "rgba(37, 99, 235, 0.15)" : "transparent",
+          color: open ? "#2563eb" : "var(--text-muted)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          transition: "all 0.15s ease",
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        title="Click or hover for Thanglish explanation"
+      >
+        <HelpCircle size={14} />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            ...posStyle,
+            marginBottom: 8,
+            width: 250,
+            background: "#0f172a",
+            color: "#f8fafc",
+            fontSize: 12,
+            lineHeight: 1.45,
+            padding: "9px 13px",
+            borderRadius: 8,
+            boxShadow: "0 10px 25px rgba(0,0,0,0.35)",
+            zIndex: 1000,
+            textAlign: "left",
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontWeight: 700, color: "#93c5fd", marginBottom: 3, fontSize: 11, letterSpacing: 0.3 }}>
+            💡 THANGLISH EXPLANATION:
+          </div>
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MetricCard({
-  label, value, icon: Icon, color, trend,
-}: { label: string; value: string | number; icon: React.ElementType; color: string; trend?: { pct: number; label: string } }) {
+  label,
+  value,
+  icon: Icon,
+  color,
+  trend,
+  help,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: string;
+  trend?: { pct: number; label: string };
+  help?: string;
+}) {
   const up = (trend?.pct ?? 0) >= 0;
   return (
-    <div className="metric-card">
-      <div className="metric-icon" style={{ background: color + "18" }}>
-        <Icon size={20} color={color} />
+    <div className="metric-card" style={{ position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+        <div className="metric-icon" style={{ background: color + "18" }}>
+          <Icon size={20} color={color} />
+        </div>
+        {help && <InfoTooltip text={help} />}
       </div>
       <div className="metric-label">{label}</div>
       <div className="metric-value">{value}</div>
@@ -786,6 +1858,8 @@ function MetricCard({
 // ─────────────────────────────────────────────────────────
 export function DashboardPage() {
   const [warehouseId, setWarehouseId] = useState<string>("");
+  const [showGuide, setShowGuide] = useState<boolean>(true);
+  const navigate = useNavigate();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard", warehouseId],
@@ -860,30 +1934,249 @@ export function DashboardPage() {
         </div>
       </div>
 
+      {/* ── Daily Factory Workflow Guide (Thanglish) ── */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
+          border: "2px solid #bfdbfe",
+          borderRadius: 14,
+          padding: "18px 20px",
+          boxShadow: "0 4px 15px rgba(37, 99, 235, 0.06)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 38, height: 38, background: "#2563eb", color: "#fff", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+              👋
+            </div>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: "#1e3a8a", margin: 0 }}>
+                Factory Daily Work Flow — Intha App-ah Yepputy Use Pannanum?
+              </h2>
+              <p style={{ fontSize: 12, color: "#475569", margin: "2px 0 0 0" }}>
+                Ungalukku easy-ah puriyura maari 4 simple steps! Inge irunthu direct-ah click panni antha page-ku polam:
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowGuide(!showGuide)}
+            style={{ fontSize: 12 }}
+          >
+            {showGuide ? "▲ Hide Guide" : "▼ Show Quick Workflow Guide"}
+          </button>
+        </div>
+
+        {showGuide && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 12, marginTop: 14 }}>
+              {/* Step 1 */}
+              <div style={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ background: "#ffedd5", color: "#c2410c", width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12 }}>1</span>
+                    <strong style={{ fontSize: 13, color: "#0f172a" }}>Raw Material & Gas Vangurathu</strong>
+                  </div>
+                  <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.4 }}>
+                    Vendor kitta irunthu <strong>Wire Rod & Argon Gas</strong> vangunathum inge <strong>Bill</strong> podanum. Stock godown-la auto-add aayidum.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: 12, width: "100%", justifyContent: "center", color: "#c2410c", borderColor: "#fed7aa" }}
+                  onClick={() => navigate("/bills")}
+                >
+                  🛒 Open Vendor Bills ➔
+                </button>
+              </div>
+
+              {/* Step 2 */}
+              <div style={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ background: "#dbeafe", color: "#1e40af", width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12 }}>2</span>
+                    <strong style={{ fontSize: 13, color: "#0f172a" }}>Factory Production Run</strong>
+                  </div>
+                  <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.4 }}>
+                    Factory-la <strong>Autoflex Welding Box</strong> ready pannumbothu batch run pannanum. Wire rod/gas stock minus aagi, finished boxes stock eri vidum.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: 12, width: "100%", justifyContent: "center", color: "#1e40af", borderColor: "#bfdbfe" }}
+                  onClick={() => navigate("/manufacturing")}
+                >
+                  🏭 Run Production ➔
+                </button>
+              </div>
+
+              {/* Step 3 */}
+              <div style={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ background: "#f3e8ff", color: "#7e22ce", width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12 }}>3</span>
+                    <strong style={{ fontSize: 13, color: "#0f172a" }}>Quotation & Customer Link</strong>
+                  </div>
+                  <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.4 }}>
+                    Customer rate kettanga na <strong>Estimate</strong> create panni WhatsApp-la link anupalam. Customer antha link click panni confirm pannikalam!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: 12, width: "100%", justifyContent: "center", color: "#7e22ce", borderColor: "#e9d5ff" }}
+                  onClick={() => navigate("/estimates")}
+                >
+                  📝 Send Quotation ➔
+                </button>
+              </div>
+
+              {/* Step 4 */}
+              <div style={{ background: "#fff", border: "1px solid #cbd5e1", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ background: "#dcfce7", color: "#15803d", width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12 }}>4</span>
+                    <strong style={{ fontSize: 13, color: "#0f172a" }}>Customer Bill & Payment</strong>
+                  </div>
+                  <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.4 }}>
+                    Finished Box customer-ku anupumbothu <strong>Invoice</strong> podanum. Box stock minus aagum. Customer kaasu kudutha aprum Record Payment click pannanum.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: 12, width: "100%", justifyContent: "center", color: "#15803d", borderColor: "#bbf7d0" }}
+                  onClick={() => navigate("/invoices")}
+                >
+                  💰 Sales Invoices ➔
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Tips strip */}
+            <div style={{ marginTop: 12, padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px dashed #93c5fd", fontSize: 12, color: "#334155", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div>
+                💡 <strong>Mukkiyamana Tips:</strong> Puthu item add panna or rate maatha <strong>Products</strong> page ponga. Godown-la evlo stock irukku nu paaka <strong>Inventory</strong> page ponga!
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => navigate("/products")}>
+                  📦 Products Master
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => navigate("/inventory")}>
+                  📊 Stock Ledger
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* ── Row 1: Key Business Metrics ── */}
       <div className="analytics-kpi-grid">
-        <MetricCard label="Total Sales Revenue" value={money(data.totalSales)} icon={TrendingUp} color="#1565d8" />
-        <MetricCard label="Total Collected (Payments)" value={money(data.totalCollected ?? 0)} icon={CheckCircle} color="#16a34a" />
-        <MetricCard label="Receivables (Pending)" value={money(data.receivables)} icon={DollarSign} color="#d97706" />
-        <MetricCard label="Total Purchases" value={money(data.totalPurchases)} icon={ShoppingCart} color="#7c3aed" />
-        <MetricCard label="Bills Payable (Pending)" value={money(data.payables)} icon={CreditCard} color="#dc2626" />
-        <MetricCard label="Inventory Value" value={money(data.inventoryValue)} icon={Boxes} color="#0891b2" />
-        <MetricCard label="Stock Units (in Warehouse)" value={`${(data.totalStockUnits ?? 0).toLocaleString()} units`} icon={Archive} color="#7c3aed" />
-        <MetricCard label="Low Stock Items" value={`${data.lowStock ?? 0} items`} icon={AlertTriangle} color="#ef4444" />
+        <MetricCard
+          label="Total Sales Revenue"
+          value={money(data.totalSales)}
+          icon={TrendingUp}
+          color="#1565d8"
+          help="Customer-ku pottu sell panna motha bill amount (Total Sales revenue in ₹)."
+        />
+        <MetricCard
+          label="Total Collected (Payments)"
+          value={money(data.totalCollected ?? 0)}
+          icon={CheckCircle}
+          color="#16a34a"
+          help="Customer kitta irunthu unga bank / cash-la vandha actual payment kaasu."
+        />
+        <MetricCard
+          label="Receivables (Pending)"
+          value={money(data.receivables)}
+          icon={DollarSign}
+          color="#d97706"
+          help="Customer innum unga factory-ku thara vendiya pending balance kaasu."
+        />
+        <MetricCard
+          label="Total Purchases"
+          value={money(data.totalPurchases)}
+          icon={ShoppingCart}
+          color="#7c3aed"
+          help="Vendor kitta irunthu Wire Rod, Argon Gas, Raw materials vangiyathaana motha purchase amount."
+        />
+        <MetricCard
+          label="Bills Payable (Pending)"
+          value={money(data.payables)}
+          icon={CreditCard}
+          color="#dc2626"
+          help="Raw material vangitu vendor-ku innum neenga thara vendiya pending kaasu."
+        />
+        <MetricCard
+          label="Inventory Value"
+          value={money(data.inventoryValue)}
+          icon={Boxes}
+          color="#0891b2"
+          help="Godown-la irukura motha Raw materials, Gas cylinder, and Finished box-oda motha madhippu (Stock value in ₹)."
+        />
+        <MetricCard
+          label="Stock Units (in Warehouse)"
+          value={`${(data.totalStockUnits ?? 0).toLocaleString()} units`}
+          icon={Archive}
+          color="#7c3aed"
+          help="Godown-la ippo total-ah ethana units/kg stock irukku nu kaattum."
+        />
+        <MetricCard
+          label="Low Stock Items"
+          value={`${data.lowStock ?? 0} items`}
+          icon={AlertTriangle}
+          color="#ef4444"
+          help="Safety level-ku keela irukkum items — pudhu raw materials vendor kitta udane order podanum."
+        />
       </div>
 
       {/* ── Row 2: Billing KPIs ── */}
       <div className="analytics-kpi-grid">
         {[
-          { label: "Total Invoices Raised", value: data.totalInvoices ?? 0, sub: "Customer invoices", color: "#1565d8", icon: FileText },
-          { label: "Unpaid Invoices", value: data.unpaidInvoices ?? 0, sub: "Awaiting payment", color: "#d97706", icon: Clock },
-          { label: "Overdue Invoices", value: data.overdueInvoices ?? 0, sub: "Past due date", color: "#dc2626", icon: AlertCircle },
-          { label: "Vendor Bills Open", value: data.unpaidBills ?? 0, sub: "Bills to pay", color: "#7c3aed", icon: ClipboardList },
+          {
+            label: "Total Invoices Raised",
+            value: data.totalInvoices ?? 0,
+            sub: "Customer invoices",
+            color: "#1565d8",
+            icon: FileText,
+            help: "Customer-ku pottu anupiya motha GST tax bills count.",
+          },
+          {
+            label: "Unpaid Invoices",
+            value: data.unpaidInvoices ?? 0,
+            sub: "Awaiting payment",
+            color: "#d97706",
+            icon: Clock,
+            help: "Customer innum full payment kudukkatha bills count (kaasu innum varala).",
+          },
+          {
+            label: "Overdue Invoices",
+            value: data.overdueInvoices ?? 0,
+            sub: "Past due date",
+            color: "#dc2626",
+            icon: AlertCircle,
+            help: "Due date thaandiyum customer payment tharatha late bills count.",
+          },
+          {
+            label: "Vendor Bills Open",
+            value: data.unpaidBills ?? 0,
+            sub: "Bills to pay",
+            color: "#7c3aed",
+            icon: ClipboardList,
+            help: "Vendor kitta vangitu innum neenga settle pannatha bills count.",
+          },
         ].map((m) => (
-          <div key={m.label} className="card" style={{ padding: "16px 20px", borderLeft: `4px solid ${m.color}`, minWidth: 0 }}>
+          <div key={m.label} className="card" style={{ padding: "16px 20px", borderLeft: `4px solid ${m.color}`, minWidth: 0, position: "relative" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>{m.label}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>{m.label}</div>
+                  <InfoTooltip text={m.help} />
+                </div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: m.value > 0 ? m.color : "var(--text-primary)", marginTop: 4 }}>{m.value}</div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{m.sub}</div>
               </div>
@@ -900,7 +2193,10 @@ export function DashboardPage() {
         {/* Sales Trend Area Chart */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="card-header">
-            <span style={{ fontWeight: 600, fontSize: 14 }}>📈 Sales Order Trend</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>📈 Sales Order Trend</span>
+              <InfoTooltip text="Recent orders oda sales value trend graph — business sales yevlo increase aagiruku nu kaattum." />
+            </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Recent 10 orders</span>
           </div>
           <div className="card-body chart-card-body">
@@ -936,7 +2232,10 @@ export function DashboardPage() {
         {/* Customer Receivables Pie */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="card-header">
-            <span style={{ fontWeight: 600, fontSize: 14 }}>💰 Collections Overview</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>💰 Collections Overview</span>
+              <InfoTooltip text="Customer kitta irunthu actual-ah vandha cash vs innum vara vendiya pending balance comparison." />
+            </div>
           </div>
           <div className="card-body chart-card-body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {billingPie.length > 0 ? (
@@ -972,7 +2271,10 @@ export function DashboardPage() {
         {/* Top Selling Products */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="card-header">
-            <span style={{ fontWeight: 600, fontSize: 14 }}>🏆 Top Selling Items</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>🏆 Top Selling Items</span>
+              <InfoTooltip text="Factory-la athigama vithu highest revenue generate panna top products list." />
+            </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>By revenue</span>
           </div>
           <div className="card-body chart-card-body" style={{ padding: 0 }}>
@@ -1016,7 +2318,10 @@ export function DashboardPage() {
         {/* Inventory Health */}
         <div className="card" style={{ minWidth: 0 }}>
           <div className="card-header">
-            <span style={{ fontWeight: 600, fontSize: 14 }}>🔴 Low Stock Alerts</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>🔴 Low Stock Alerts</span>
+              <InfoTooltip text="Reorder level-ku keezha irukura items — godown-la stock koraivana udane pudhu purchase order podanum." />
+            </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{warehouseId ? activeWarehouse?.name : "All Warehouses"}</span>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
@@ -1140,9 +2445,219 @@ export function DashboardPage() {
 }
 
 // ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+// RECIPE / BILL OF MATERIALS (BOM) MODAL
+// ─────────────────────────────────────────────────────────
+export function RecipeModal({
+  product,
+  open,
+  onClose,
+}: {
+  product: any | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const allProducts = useList<any>("products", "/products");
+  const [components, setComponents] = useState<Array<{ childProductId: string; quantity: number }>>([]);
+
+  useEffect(() => {
+    if (product) {
+      const existing = (product.components ?? []).map((c: any) => ({
+        childProductId: c.childProductId,
+        quantity: Number(c.quantity) || 1,
+      }));
+      setComponents(existing);
+    }
+  }, [product, open]);
+
+  const rawMaterials = (allProducts.data ?? []).filter(
+    (p: any) => p.id !== product?.id && p.classification !== "FINISHED_GOOD"
+  );
+
+  const addComponent = () => {
+    const firstId = rawMaterials[0]?.id || (allProducts.data ?? [])[0]?.id || "";
+    setComponents([...components, { childProductId: firstId, quantity: 1 }]);
+  };
+
+  const removeComponent = (idx: number) => {
+    setComponents(components.filter((_, i) => i !== idx));
+  };
+
+  const updateComponent = (idx: number, field: "childProductId" | "quantity", val: any) => {
+    const next = [...components];
+    next[idx] = { ...next[idx], [field]: field === "quantity" ? Number(val) : val };
+    setComponents(next);
+  };
+
+  const saveRecipe = useMutation({
+    mutationFn: () => {
+      return api.patch(`/products/${product?.id}`, {
+        components: components.filter((c) => c.childProductId && c.quantity > 0),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["prodRuns"] });
+      toast(`Recipe updated for "${product?.name}"!`);
+      onClose();
+    },
+    onError: () => toast("Failed to save recipe", "error"),
+  });
+
+  const estimatedMaterialCost = components.reduce((acc, c) => {
+    const raw = (allProducts.data ?? []).find((p: any) => p.id === c.childProductId);
+    return acc + (Number(raw?.costPrice) || 0) * (Number(c.quantity) || 0);
+  }, 0);
+
+  const sellingPrice = Number(product?.sellingPrice) || 0;
+  const margin = sellingPrice > 0 ? ((sellingPrice - estimatedMaterialCost) / sellingPrice) * 100 : 0;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`🥣 Recipe Formula: ${product?.name ?? ""}`}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={saveRecipe.isPending}
+            onClick={() => saveRecipe.mutate()}
+          >
+            {saveRecipe.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />} Save Recipe Formula
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ background: "#f8fafc", padding: "12px 14px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>
+            Define raw materials and gas consumables required to produce <strong>1 unit</strong> of {product?.name}:
+          </div>
+          <div style={{ display: "flex", gap: 20, marginTop: 8 }}>
+            <div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Raw Material Cost / Unit</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{money(estimatedMaterialCost)}</div>
+            </div>
+            <div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Selling Price</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>{money(sellingPrice)}</div>
+            </div>
+            <div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Estimated Margin</span>
+              <div style={{ fontSize: 16, fontWeight: 700, color: margin >= 0 ? "var(--success)" : "var(--danger)" }}>
+                {margin.toFixed(1)}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>
+              RAW MATERIALS & GAS INGREDIENTS
+            </span>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={addComponent}>
+              <Plus size={13} /> Add Material
+            </button>
+          </div>
+
+          {components.length === 0 ? (
+            <div style={{ padding: "20px", textAlign: "center", border: "1px dashed #cbd5e1", borderRadius: 8, color: "var(--text-muted)", fontSize: 13 }}>
+              No materials configured yet. Click <strong>"+ Add Material"</strong> to add required wire, gas, wood, or chemicals.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {components.map((comp, idx) => {
+                const raw = (allProducts.data ?? []).find((p: any) => p.id === comp.childProductId);
+                const subCost = (Number(raw?.costPrice) || 0) * (Number(comp.quantity) || 0);
+
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "2.5fr 1fr 1fr auto",
+                      gap: 10,
+                      alignItems: "center",
+                      background: "#fff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 6,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <div>
+                      <select
+                        className="input-field"
+                        style={{ fontSize: 13 }}
+                        value={comp.childProductId}
+                        onChange={(e) => updateComponent(idx, "childProductId", e.target.value)}
+                      >
+                        <option value="">Select ingredient…</option>
+                        {(allProducts.data ?? [])
+                          .filter((p: any) => p.id !== product?.id)
+                          .map((p: any) => (
+                            <option key={p.id} value={p.id}>
+                              {p.classification === "CONSUMABLE" ? "⚡ [Consumable]" : "🏭 [Raw Material]"} {p.name} (Cost: {money(p.costPrice)})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <NumberStepper
+                        value={comp.quantity}
+                        onChange={(val) => updateComponent(idx, "quantity", val)}
+                        min={0.0001}
+                        step={0.5}
+                        size="sm"
+                      />
+                    </div>
+
+                    <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>
+                      {money(subCost)}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: "var(--danger)", padding: 4 }}
+                      onClick={() => removeComponent(idx)}
+                      title="Remove component"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
 // PRODUCTS PAGE
 // ─────────────────────────────────────────────────────────
-type Product = { id: string; name: string; sku: string; sellingPrice: string; costPrice: string; type: string; reorderLevel: string };
+type Product = {
+  id: string;
+  name: string;
+  sku: string;
+  sellingPrice: string;
+  costPrice: string;
+  type: string;
+  classification?: "RAW_MATERIAL" | "CONSUMABLE" | "FINISHED_GOOD";
+  components?: any[];
+  reorderLevel: string;
+  description?: string;
+  isActive?: boolean;
+};
 
 export function ProductsPage() {
   const qc = useQueryClient();
@@ -1150,13 +2665,168 @@ export function ProductsPage() {
   const products = useList<Product>("products", "/products");
   const [open, setOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", sku: "", sellingPrice: "0", costPrice: "0", reorderLevel: "5", description: "" });
+  const [recipeProduct, setRecipeProduct] = useState<Product | null>(null);
+  const [tab, setTab] = useState<"ALL" | "RAW_CONSUMABLE" | "FINISHED_GOOD">("ALL");
+
+  const [form, setForm] = useState({
+    name: "",
+    sku: "",
+    unit: "box",
+    classification: "FINISHED_GOOD" as "RAW_MATERIAL" | "CONSUMABLE" | "FINISHED_GOOD",
+    sellingPrice: "0",
+    costPrice: "0",
+    reorderLevel: "5",
+    description: "",
+  });
+  const [recipeComponents, setRecipeComponents] = useState<Array<{ childProductId: string; quantity: number }>>([]);
+  const [bulkHelperOpen, setBulkHelperOpen] = useState(false);
+  const [bulkAmount, setBulkAmount] = useState("");
+  const [bulkQty, setBulkQty] = useState("");
   const [jsonInput, setJsonInput] = useState("");
   const f = (k: string) => (v: string) => setForm((p) => ({ ...p, [k]: v }));
 
+  // Edit Product State
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    sku: "",
+    unit: "kg",
+    classification: "FINISHED_GOOD" as "RAW_MATERIAL" | "CONSUMABLE" | "FINISHED_GOOD",
+    sellingPrice: "0",
+    costPrice: "0",
+    reorderLevel: "5",
+    description: "",
+    isActive: true,
+  });
+  const [editBulkHelperOpen, setEditBulkHelperOpen] = useState(false);
+  const [editBulkAmount, setEditBulkAmount] = useState("");
+  const [editBulkQty, setEditBulkQty] = useState("");
+  const ef = (k: string) => (v: any) => setEditForm((p) => ({ ...p, [k]: v }));
+
+  const isRawOrConsumable = form.classification === "RAW_MATERIAL" || form.classification === "CONSUMABLE";
+  const isEditRawOrConsumable = editForm.classification === "RAW_MATERIAL" || editForm.classification === "CONSUMABLE";
+
+  const handleApplyBulkCost = () => {
+    const amt = Number(bulkAmount);
+    const qty = Number(bulkQty);
+    if (amt > 0 && qty > 0) {
+      const perUnit = Number((amt / qty).toFixed(2));
+      setForm((p) => ({ ...p, costPrice: String(perUnit) }));
+      toast(`Calculated: ₹${perUnit} per ${form.unit}`);
+      setBulkHelperOpen(false);
+    }
+  };
+
+  const handleApplyEditBulkCost = () => {
+    const amt = Number(editBulkAmount);
+    const qty = Number(editBulkQty);
+    if (amt > 0 && qty > 0) {
+      const perUnit = Number((amt / qty).toFixed(2));
+      setEditForm((p) => ({ ...p, costPrice: String(perUnit) }));
+      toast(`Calculated: ₹${perUnit} per ${editForm.unit}`);
+      setEditBulkHelperOpen(false);
+    }
+  };
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.patch(`/products/${editProduct?.id}`, {
+        name: editForm.name.trim(),
+        sku: editForm.sku.trim(),
+        classification: editForm.classification,
+        sellingPrice: isEditRawOrConsumable ? 0 : Number(editForm.sellingPrice),
+        costPrice: Number(editForm.costPrice),
+        reorderLevel: Number(editForm.reorderLevel),
+        description: editForm.description ? `${editForm.description} (Unit: ${editForm.unit})` : `Unit: ${editForm.unit}`,
+        isActive: editForm.isActive,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["inv"] });
+      setEditProduct(null);
+      toast("Product updated successfully!");
+    },
+    onError: (err: any) => {
+      toast(err.response?.data?.message ?? "Failed to update product.", "error");
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/products/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["inv"] });
+      const msg = res.data?.message || "Item processed successfully.";
+      toast(msg);
+    },
+    onError: (err: any) => {
+      toast(err.response?.data?.message ?? "Could not delete item.", "error");
+    },
+  });
+
+  const handleStartEdit = (item: Product) => {
+    const unitMatch = item.description?.match(/Unit:\s*([a-zA-Z0-9]+)/);
+    const unit = unitMatch ? unitMatch[1] : (item.classification === "CONSUMABLE" ? "cylinder" : item.classification === "FINISHED_GOOD" ? "box" : "kg");
+    const cleanDesc = item.description?.replace(/\(Unit:\s*[a-zA-Z0-9]+\)/, "")?.replace(/Unit:\s*[a-zA-Z0-9]+/, "")?.trim() || "";
+
+    setEditForm({
+      name: item.name,
+      sku: item.sku,
+      unit: unit,
+      classification: item.classification || "FINISHED_GOOD",
+      sellingPrice: String(item.sellingPrice ?? 0),
+      costPrice: String(item.costPrice ?? 0),
+      reorderLevel: String(item.reorderLevel ?? 0),
+      description: cleanDesc,
+      isActive: item.isActive !== false,
+    });
+    setEditBulkHelperOpen(false);
+    setEditBulkAmount("");
+    setEditBulkQty("");
+    setEditProduct(item);
+  };
+
+  const handleDelete = (item: Product) => {
+    const ok = window.confirm(
+      `Delete "${item.name}" (${item.sku})?\n\nNote: If this item has already been used in purchase bills, sales orders, or factory production runs, it will be safely deactivated (archived) to preserve your accounting history.`
+    );
+    if (ok) {
+      remove.mutate(item.id);
+    }
+  };
+
+  const handleToggleActive = (item: Product) => {
+    const nextStatus = item.isActive === false ? true : false;
+    api.patch(`/products/${item.id}`, { isActive: nextStatus }).then(() => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast(`Item "${item.name}" ${nextStatus ? "reactivated" : "archived"} successfully!`);
+    }).catch((err: any) => {
+      toast(err.response?.data?.message ?? "Failed to update item status", "error");
+    });
+  };
+
   const create = useMutation({
-    mutationFn: () => api.post("/products", { ...form, sellingPrice: Number(form.sellingPrice), costPrice: Number(form.costPrice), reorderLevel: Number(form.reorderLevel) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["products"] }); setOpen(false); setForm({ name: "", sku: "", sellingPrice: "0", costPrice: "0", reorderLevel: "5", description: "" }); toast("Item created successfully"); },
+    mutationFn: () =>
+      api.post("/products", {
+        name: form.name.trim(),
+        sku: form.sku.trim(),
+        description: form.description ? `${form.description} (Unit: ${form.unit})` : `Unit: ${form.unit}`,
+        classification: form.classification,
+        sellingPrice: isRawOrConsumable ? 0 : Number(form.sellingPrice),
+        costPrice: Number(form.costPrice),
+        reorderLevel: Number(form.reorderLevel),
+        components: isRawOrConsumable ? undefined : recipeComponents.filter((c) => c.childProductId && c.quantity > 0),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      setOpen(false);
+      setForm({ name: "", sku: "", unit: "box", classification: "FINISHED_GOOD", sellingPrice: "0", costPrice: "0", reorderLevel: "5", description: "" });
+      setRecipeComponents([]);
+      setBulkHelperOpen(false);
+      setBulkAmount("");
+      setBulkQty("");
+      toast("Item created successfully");
+    },
     onError: () => toast("Could not create item. SKU may already exist.", "error"),
   });
 
@@ -1188,47 +2858,172 @@ export function ProductsPage() {
   const downloadSamplePayload = () => {
     const sample = [
       {
-        name: "Wireless Keyboard",
-        sku: "KB-101",
+        name: "Autoflex Welding Material Box",
+        sku: "AF-WELD-100",
+        classification: "FINISHED_GOOD",
         sellingPrice: 1500,
         costPrice: 900,
         taxRate: 18,
-        description: "Ergonomic wireless 2.4GHz keyboard"
+        description: "Manufactured welding flux cored wire",
       },
       {
-        name: "Optical Mouse",
-        sku: "MS-202",
-        sellingPrice: 800,
-        costPrice: 450,
+        name: "Argon Shielding Gas Cylinder",
+        sku: "GAS-ARGON-47",
+        classification: "CONSUMABLE",
+        sellingPrice: 0,
+        costPrice: 850,
         taxRate: 18,
-        description: "High precision optical mouse"
-      }
+        description: "Industrial grade argon gas for production",
+      },
+      {
+        name: "Raw Steel Wire Rod 3mm",
+        sku: "RM-WIRE-03",
+        classification: "RAW_MATERIAL",
+        sellingPrice: 0,
+        costPrice: 65,
+        taxRate: 18,
+        description: "Raw material wire rod bought from vendor",
+      },
     ];
 
     const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "sample_products_payload.json";
+    a.download = "sample_factory_products_payload.json";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast("Sample Product JSON payload downloaded!");
+    toast("Sample Factory Products JSON downloaded!");
   };
 
+  const filteredData = useMemo(() => {
+    const list = products.data ?? [];
+    if (tab === "RAW_CONSUMABLE") {
+      return list.filter((r) => r.classification === "RAW_MATERIAL" || r.classification === "CONSUMABLE");
+    }
+    if (tab === "FINISHED_GOOD") {
+      return list.filter((r) => !r.classification || r.classification === "FINISHED_GOOD");
+    }
+    return list;
+  }, [products.data, tab]);
+
   const columns: Column<Product>[] = [
-    { label: "Item Name", render: (r) => <span style={{ fontWeight: 600 }}>{r.name}</span> },
+    {
+      label: "Item Name",
+      render: (r) => (
+        <div>
+          <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            {r.name}
+            {r.isActive === false && (
+              <span style={{ background: "#fee2e2", color: "#991b1b", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                Archived
+              </span>
+            )}
+          </div>
+          {r.description && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{r.description}</div>}
+        </div>
+      ),
+    },
     { label: "SKU", render: (r) => <span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>{r.sku}</span> },
-    { label: "Type", render: (r) => <Badge status={r.type ?? "GOODS"} /> },
-    { label: "Selling Price", key: "sellingPrice", align: "right", render: (r) => <strong>{money(Number(r.sellingPrice))}</strong> },
-    { label: "Cost Price", key: "costPrice", align: "right", render: (r) => money(Number(r.costPrice)) },
+    {
+      label: "Classification",
+      render: (r) => {
+        if (r.classification === "RAW_MATERIAL") {
+          return <span style={{ background: "#ffedd5", color: "#c2410c", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>🏭 Raw Material</span>;
+        }
+        if (r.classification === "CONSUMABLE") {
+          return <span style={{ background: "#f3e8ff", color: "#7e22ce", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>⚡ Consumable (Gas)</span>;
+        }
+        return <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>📦 Finished Good</span>;
+      },
+    },
+    {
+      label: "Cost Price",
+      key: "costPrice",
+      align: "right",
+      render: (r) => (
+        <div>
+          <strong>{money(Number(r.costPrice))}</strong>
+        </div>
+      ),
+    },
+    {
+      label: "Selling Price",
+      key: "sellingPrice",
+      align: "right",
+      render: (r) => {
+        if (r.classification === "RAW_MATERIAL" || r.classification === "CONSUMABLE") {
+          return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>— (Raw / Not Sold)</span>;
+        }
+        return <strong>{money(Number(r.sellingPrice))}</strong>;
+      },
+    },
+    {
+      label: "Factory Recipe",
+      align: "center",
+      render: (r) => {
+        if (r.classification === "RAW_MATERIAL" || r.classification === "CONSUMABLE") {
+          return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>Raw Ingredient</span>;
+        }
+        const count = r.components?.length ?? 0;
+        return (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: 11, padding: "2px 8px" }}
+            onClick={() => setRecipeProduct(r)}
+          >
+            🥣 {count > 0 ? `Recipe (${count} items)` : "+ Set Recipe"}
+          </button>
+        );
+      },
+    },
     { label: "Reorder Lvl", key: "reorderLevel", align: "right" },
+    {
+      label: "Actions",
+      align: "center",
+      render: (r) => (
+        <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ padding: "3px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => handleStartEdit(r)}
+            title="Edit Item Details & Prices"
+          >
+            <Pencil size={12} /> Edit
+          </button>
+          {r.isActive === false ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ padding: "3px 8px", fontSize: 12, color: "#15803d", borderColor: "#86efac", display: "flex", alignItems: "center", gap: 4 }}
+              onClick={() => handleToggleActive(r)}
+              title="Restore / Reactivate Item"
+            >
+              <RotateCcw size={12} /> Restore
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ padding: "3px 8px", fontSize: 12, color: "#dc2626", borderColor: "#fca5a5", display: "flex", alignItems: "center", gap: 4 }}
+              onClick={() => handleDelete(r)}
+              title="Delete or Archive Item"
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
     <div>
-      <PageHeader title="Products Catalog" subtitle="Manage your items catalog & bulk product creation">
+      <PageHeader title="Products & Factory Items" subtitle="Manage raw materials, gas consumables, and manufactured finished goods">
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn btn-secondary" onClick={() => setBulkOpen(true)}>
             <Download size={15} /> Bulk Upload Products
@@ -1238,20 +3033,46 @@ export function ProductsPage() {
           </button>
         </div>
       </PageHeader>
+
+      {/* Classification Filter Tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button
+          className={`btn ${tab === "ALL" ? "btn-primary" : "btn-secondary"}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setTab("ALL")}
+        >
+          All Items ({(products.data ?? []).length})
+        </button>
+        <button
+          className={`btn ${tab === "FINISHED_GOOD" ? "btn-primary" : "btn-secondary"}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setTab("FINISHED_GOOD")}
+        >
+          📦 Finished Goods ({(products.data ?? []).filter((p) => !p.classification || p.classification === "FINISHED_GOOD").length})
+        </button>
+        <button
+          className={`btn ${tab === "RAW_CONSUMABLE" ? "btn-primary" : "btn-secondary"}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setTab("RAW_CONSUMABLE")}
+        >
+          🏭 Raw Materials & Gas ({(products.data ?? []).filter((p) => p.classification === "RAW_MATERIAL" || p.classification === "CONSUMABLE").length})
+        </button>
+      </div>
+
       <div className="card">
         <DataTable
           columns={columns}
-          data={products.data ?? []}
+          data={filteredData}
           loading={products.isLoading}
           error={products.error}
           searchFields={["name", "sku"]}
           emptyIcon={<Package size={48} />}
-          emptyText="No items yet"
+          emptyText="No items found"
         />
       </div>
 
       {/* Single Item Creation Modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title="New Item"
+      <Modal open={open} onClose={() => setOpen(false)} title="New Item / Product"
         footer={
           <>
             <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
@@ -1263,26 +3084,479 @@ export function ProductsPage() {
         }
       >
         <div className="form-grid form-grid-2">
+          <InputGroup label="Factory Item Classification *">
+            <select
+              className="input-field"
+              value={form.classification}
+              onChange={(e) => {
+                const cls = e.target.value as any;
+                setForm({
+                  ...form,
+                  classification: cls,
+                  unit: cls === "FINISHED_GOOD" ? "box" : cls === "CONSUMABLE" ? "cylinder" : "kg",
+                });
+              }}
+              style={{ fontWeight: 600, background: isRawOrConsumable ? "#fff7ed" : "#eff6ff" }}
+            >
+              <option value="FINISHED_GOOD">📦 Finished Good (Autoflex / Produced to Sell)</option>
+              <option value="RAW_MATERIAL">🏭 Raw Material (Wire Rod, Wood, Chemical from Vendor)</option>
+              <option value="CONSUMABLE">⚡ Consumable (Gas Cylinder, Flux, Packing Box)</option>
+            </select>
+          </InputGroup>
+
           <InputGroup label="Item Name *">
-            <input className="input-field" value={form.name} onChange={(e) => f("name")(e.target.value)} required />
+            <input
+              className="input-field"
+              placeholder={isRawOrConsumable ? "e.g. Raw Wire Rod 3mm or Argon Gas" : "e.g. Autoflex Welding Material Box"}
+              value={form.name}
+              onChange={(e) => f("name")(e.target.value)}
+              required
+            />
           </InputGroup>
+
           <InputGroup label="SKU *">
-            <input className="input-field" value={form.sku} onChange={(e) => f("sku")(e.target.value)} required />
+            <input className="input-field" placeholder="e.g. AF-101" value={form.sku} onChange={(e) => f("sku")(e.target.value)} required />
           </InputGroup>
-          <InputGroup label="Selling Price (₹)">
-            <input className="input-field" type="number" min="0" value={form.sellingPrice} onChange={(e) => f("sellingPrice")(e.target.value)} />
+
+          <InputGroup label="Unit of Measurement *">
+            <select
+              className="input-field"
+              value={form.unit}
+              onChange={(e) => f("unit")(e.target.value)}
+            >
+              {isRawOrConsumable ? (
+                <>
+                  <option value="kg">kg (Kilograms)</option>
+                  <option value="cylinder">Cylinder / Can</option>
+                  <option value="liter">Liters</option>
+                  <option value="ton">Ton (1000 kg)</option>
+                  <option value="grams">Grams</option>
+                  <option value="meter">Meters</option>
+                  <option value="box">Boxes / Cartons</option>
+                  <option value="nos">Pieces / Nos</option>
+                </>
+              ) : (
+                <>
+                  <option value="box">Boxes / Cartons</option>
+                  <option value="pack">Packs / Packets</option>
+                  <option value="nos">Pieces / Nos</option>
+                  <option value="sets">Sets</option>
+                  <option value="units">Units</option>
+                </>
+              )}
+            </select>
           </InputGroup>
-          <InputGroup label="Cost Price (₹)">
-            <input className="input-field" type="number" min="0" value={form.costPrice} onChange={(e) => f("costPrice")(e.target.value)} />
+
+          {/* Pricing Fields: Dynamic based on classification */}
+          {isRawOrConsumable ? (
+            <div style={{ gridColumn: "span 2", background: "#f8fafc", padding: "12px 14px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" }}>
+                  Cost Price (per {form.unit}) *
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, color: "var(--accent)", padding: "0 4px" }}
+                  onClick={() => setBulkHelperOpen(!bulkHelperOpen)}
+                >
+                  {bulkHelperOpen ? "Close Calculator" : "⚡ Calculate from Bulk Purchase (e.g. ₹ for kg)"}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>₹</span>
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={`Rate per 1 ${form.unit}`}
+                  value={form.costPrice}
+                  onChange={(e) => f("costPrice")(e.target.value)}
+                />
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>per {form.unit}</span>
+              </div>
+
+              {bulkHelperOpen && (
+                <div style={{ marginTop: 10, padding: 12, background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
+                    Supplier invoice-la irukkum Total Amount & Qty enter pannunga (e.g. ₹3250 for 50 kg):
+                  </span>
+                  <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.2fr auto", gap: 10, alignItems: "center" }}>
+                    <input
+                      className="input-field"
+                      type="number"
+                      placeholder="Total Bill ₹ (e.g. 3250)"
+                      value={bulkAmount}
+                      onChange={(e) => setBulkAmount(e.target.value)}
+                    />
+                    <input
+                      className="input-field"
+                      type="number"
+                      placeholder={`Total ${form.unit} (e.g. 50)`}
+                      value={bulkQty}
+                      onChange={(e) => setBulkQty(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleApplyBulkCost}
+                      disabled={!Number(bulkAmount) || !Number(bulkQty)}
+                    >
+                      Calculate & Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <InputGroup label="Selling Price (₹) *">
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  placeholder="Rate to customer"
+                  value={form.sellingPrice}
+                  onChange={(e) => f("sellingPrice")(e.target.value)}
+                  required
+                />
+              </InputGroup>
+              <InputGroup label="Estimated Cost Price (₹, Optional)">
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  placeholder="Auto-calculated from recipe"
+                  value={form.costPrice}
+                  onChange={(e) => f("costPrice")(e.target.value)}
+                />
+              </InputGroup>
+
+              {/* Inline Recipe Builder for Finished Good */}
+              <div style={{ gridColumn: "span 2", background: "#f8fafc", padding: "14px", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" }}>
+                      🥣 Recipe Formula (Raw Materials & Gas needed for 1 unit)
+                    </span>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                      Indha Finished Good thayarikka thevayana ingredients ippove add pannalam:
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      const rawList = (products.data ?? []).filter((p) => p.classification !== "FINISHED_GOOD");
+                      setRecipeComponents([...recipeComponents, { childProductId: rawList[0]?.id || (products.data ?? [])[0]?.id || "", quantity: 1 }]);
+                    }}
+                  >
+                    <Plus size={13} /> Add Ingredient / Gas
+                  </button>
+                </div>
+
+                {recipeComponents.length === 0 ? (
+                  <div style={{ padding: "12px", background: "#fff", border: "1px dashed #cbd5e1", borderRadius: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                    💡 <strong>Tip:</strong> Neenga ippove formula add pannalam, or product create panna aprum kooda table-la irukkum <strong>"🥣 + Set Recipe"</strong> click panni add pannikalam.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {recipeComponents.map((comp, idx) => {
+                      const raw = (products.data ?? []).find((p) => p.id === comp.childProductId);
+                      const subCost = (Number(raw?.costPrice) || 0) * (Number(comp.quantity) || 0);
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "2.5fr 1fr 1fr auto",
+                            gap: 10,
+                            alignItems: "center",
+                            background: "#fff",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: 6,
+                            padding: "6px 10px",
+                          }}
+                        >
+                          <select
+                            className="input-field"
+                            style={{ fontSize: 13 }}
+                            value={comp.childProductId}
+                            onChange={(e) => {
+                              const next = [...recipeComponents];
+                              next[idx].childProductId = e.target.value;
+                              setRecipeComponents(next);
+                            }}
+                          >
+                            <option value="">Select raw material / gas…</option>
+                            {(products.data ?? []).map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.classification === "CONSUMABLE" ? "⚡ [Consumable]" : "🏭 [Raw Material]"} {p.name} (Cost: {money(p.costPrice)})
+                              </option>
+                            ))}
+                          </select>
+
+                          <NumberStepper
+                            value={comp.quantity}
+                            onChange={(val) => {
+                              const next = [...recipeComponents];
+                              next[idx].quantity = val;
+                              setRecipeComponents(next);
+                            }}
+                            min={0.0001}
+                            step={0.5}
+                            size="sm"
+                          />
+
+                          <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>
+                            {money(subCost)}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: "var(--danger)", padding: 4 }}
+                            onClick={() => setRecipeComponents(recipeComponents.filter((_, i) => i !== idx))}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "#f1f5f9", borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
+                      <span>Estimated Material Cost per 1 Unit:</span>
+                      <span style={{ color: "var(--accent)", fontSize: 14 }}>
+                        {money(
+                          recipeComponents.reduce((acc, c) => {
+                            const raw = (products.data ?? []).find((p) => p.id === c.childProductId);
+                            return acc + (Number(raw?.costPrice) || 0) * (Number(c.quantity) || 0);
+                          }, 0)
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <InputGroup label="Reorder Alert Level">
+            <NumberStepper
+              value={form.reorderLevel}
+              onChange={(val) => f("reorderLevel")(String(val))}
+              min={0}
+              step={5}
+              size="md"
+              quickAdd={[5, 10, 25]}
+            />
           </InputGroup>
-          <InputGroup label="Reorder Level">
-            <input className="input-field" type="number" min="0" value={form.reorderLevel} onChange={(e) => f("reorderLevel")(e.target.value)} />
-          </InputGroup>
+
           <InputGroup label="Description">
-            <input className="input-field" value={form.description} onChange={(e) => f("description")(e.target.value)} />
+            <input className="input-field" placeholder="Notes or specifications" value={form.description} onChange={(e) => f("description")(e.target.value)} />
           </InputGroup>
         </div>
         {create.isError && <p style={{ color: "var(--danger)", fontSize: 12, marginTop: 12 }}>Failed to create. SKU may already exist.</p>}
+      </Modal>
+
+      {/* Recipe / BOM Modal */}
+      <RecipeModal
+        product={recipeProduct}
+        open={recipeProduct !== null}
+        onClose={() => setRecipeProduct(null)}
+      />
+
+      {/* Edit Item / Product Modal */}
+      <Modal
+        open={editProduct !== null}
+        onClose={() => setEditProduct(null)}
+        title={`Edit Item: ${editProduct?.name || ""}`}
+        footer={
+          <>
+            <button className="btn btn-secondary" onClick={() => setEditProduct(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={update.isPending}
+              onClick={() => update.mutate()}
+            >
+              {update.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />}
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <div className="form-grid form-grid-2">
+          <InputGroup label="Factory Item Classification *">
+            <select
+              className="input-field"
+              value={editForm.classification}
+              onChange={(e) => ef("classification")(e.target.value)}
+              style={{ fontWeight: 600, background: isEditRawOrConsumable ? "#fff7ed" : "#eff6ff" }}
+            >
+              <option value="FINISHED_GOOD">📦 Finished Good (Autoflex / Produced to Sell)</option>
+              <option value="RAW_MATERIAL">🏭 Raw Material (Wire Rod, Wood, Chemical from Vendor)</option>
+              <option value="CONSUMABLE">⚡ Consumable (Gas Cylinder, Flux, Packing Box)</option>
+            </select>
+          </InputGroup>
+
+          <InputGroup label="Item Name *">
+            <input
+              className="input-field"
+              value={editForm.name}
+              onChange={(e) => ef("name")(e.target.value)}
+              required
+            />
+          </InputGroup>
+
+          <InputGroup label="SKU *">
+            <input
+              className="input-field font-mono"
+              value={editForm.sku}
+              onChange={(e) => ef("sku")(e.target.value)}
+              required
+            />
+          </InputGroup>
+
+          <InputGroup label="Unit of Measurement *">
+            <select
+              className="input-field"
+              value={editForm.unit}
+              onChange={(e) => ef("unit")(e.target.value)}
+            >
+              <option value="kg">Kilogram (kg)</option>
+              <option value="cylinder">Gas Cylinder (cylinder)</option>
+              <option value="box">Box / Carton (box)</option>
+              <option value="ton">Metric Ton (ton)</option>
+              <option value="liter">Liter (liter)</option>
+              <option value="meter">Meter (meter)</option>
+              <option value="pieces">Pieces / Units (pcs)</option>
+            </select>
+          </InputGroup>
+
+          {isEditRawOrConsumable ? (
+            <div style={{ gridColumn: "span 2" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label className="input-label" style={{ margin: 0 }}>
+                  Cost Price (₹ per 1 {editForm.unit}) *
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: 11, padding: "2px 8px" }}
+                  onClick={() => setEditBulkHelperOpen(!editBulkHelperOpen)}
+                >
+                  <Calculator size={12} /> {editBulkHelperOpen ? "Close Calculator" : "Calculate from Bulk Bill"}
+                </button>
+              </div>
+
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                step="any"
+                placeholder={`Cost to buy 1 ${editForm.unit}`}
+                value={editForm.costPrice}
+                onChange={(e) => ef("costPrice")(e.target.value)}
+                required
+              />
+
+              {editBulkHelperOpen && (
+                <div style={{ marginTop: 8, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}>
+                    🧮 Bulk Purchase Rate Calculator:
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
+                    <input
+                      className="input-field"
+                      type="number"
+                      placeholder="Total Bill ₹ (e.g. 5000)"
+                      value={editBulkAmount}
+                      onChange={(e) => setEditBulkAmount(e.target.value)}
+                    />
+                    <input
+                      className="input-field"
+                      type="number"
+                      placeholder={`Total ${editForm.unit} (e.g. 100)`}
+                      value={editBulkQty}
+                      onChange={(e) => setEditBulkQty(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleApplyEditBulkCost}
+                      disabled={!Number(editBulkAmount) || !Number(editBulkQty)}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <InputGroup label="Selling Price (₹) *">
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={editForm.sellingPrice}
+                  onChange={(e) => ef("sellingPrice")(e.target.value)}
+                  required
+                />
+              </InputGroup>
+
+              <InputGroup label="Cost Price (₹, per unit)">
+                <input
+                  className="input-field"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={editForm.costPrice}
+                  onChange={(e) => ef("costPrice")(e.target.value)}
+                />
+              </InputGroup>
+            </>
+          )}
+
+          <InputGroup label="Reorder Alert Level">
+            <NumberStepper
+              value={editForm.reorderLevel}
+              onChange={(val) => ef("reorderLevel")(String(val))}
+              min={0}
+              step={5}
+              size="md"
+              quickAdd={[5, 10, 25]}
+            />
+          </InputGroup>
+
+          <InputGroup label="Active Status">
+            <select
+              className="input-field"
+              value={editForm.isActive ? "true" : "false"}
+              onChange={(e) => ef("isActive")(e.target.value === "true")}
+            >
+              <option value="true">✅ Active (Available for orders & production)</option>
+              <option value="false">⏸️ Archived (Inactive - hidden from dropdowns)</option>
+            </select>
+          </InputGroup>
+
+          <div style={{ gridColumn: "span 2" }}>
+            <InputGroup label="Description / Specification">
+              <input
+                className="input-field"
+                placeholder="Notes or specifications"
+                value={editForm.description}
+                onChange={(e) => ef("description")(e.target.value)}
+              />
+            </InputGroup>
+          </div>
+        </div>
       </Modal>
 
       {/* Bulk Upload Products Modal */}
@@ -1388,12 +3662,13 @@ type InventoryRow = { product: { name: string; sku: string }; warehouse: { name:
 
 export function InventoryPage() {
   const list = useList<InventoryRow>("inv", "/inventory");
-  const products = useList<{ id: string; name: string; sku: string }>("products", "/products");
+  const products = useList<{ id: string; name: string; sku: string; classification?: string }>("products", "/products");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [invTab, setInvTab] = useState<"ALL" | "RAW_CONSUMABLE" | "FINISHED_GOOD">("ALL");
   const [targetWarehouseId, setTargetWarehouseId] = useState("");
   const [stockCounts, setStockCounts] = useState<{ [productId: string]: string }>({});
   const [form, setForm] = useState({ productId: "", warehouseId: "", quantity: "0" });
@@ -1456,9 +3731,39 @@ export function InventoryPage() {
     saveBulkSheet.mutate(itemsToSave);
   };
 
+  const filteredList = useMemo(() => {
+    const rows = list.data ?? [];
+    if (invTab === "RAW_CONSUMABLE") {
+      return rows.filter((r) => {
+        const c = (r.product as any)?.classification;
+        return c === "RAW_MATERIAL" || c === "CONSUMABLE";
+      });
+    }
+    if (invTab === "FINISHED_GOOD") {
+      return rows.filter((r) => {
+        const c = (r.product as any)?.classification;
+        return !c || c === "FINISHED_GOOD";
+      });
+    }
+    return rows;
+  }, [list.data, invTab]);
+
   const columns: Column<InventoryRow>[] = [
     { label: "Item", render: (r) => <span style={{ fontWeight: 600 }}>{r.product?.name}</span> },
     { label: "SKU", render: (r) => <span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{r.product?.sku}</span> },
+    {
+      label: "Classification",
+      render: (r) => {
+        const c = (r.product as any)?.classification;
+        if (c === "RAW_MATERIAL") {
+          return <span style={{ background: "#ffedd5", color: "#c2410c", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>🏭 Raw Material</span>;
+        }
+        if (c === "CONSUMABLE") {
+          return <span style={{ background: "#f3e8ff", color: "#7e22ce", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>⚡ Consumable (Gas)</span>;
+        }
+        return <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>📦 Finished Good</span>;
+      },
+    },
     { label: "Warehouse", render: (r) => r.warehouse?.name },
     { label: "On Hand", align: "right", render: (r) => <strong style={{ color: "var(--text-primary)" }}>{r.quantity}</strong> },
     { label: "Reserved", align: "right", render: (r) => <span style={{ color: r.reservedQuantity > 0 ? "var(--warning)" : "var(--text-muted)" }}>{r.reservedQuantity}</span> },
@@ -1474,7 +3779,7 @@ export function InventoryPage() {
 
   return (
     <div>
-      <PageHeader title="Inventory Stock" subtitle="Stock levels & interactive bulk stock count editor">
+      <PageHeader title="Factory Inventory Stock" subtitle="Live warehouse stock levels for raw materials, gas consumables, and finished goods">
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn btn-secondary" onClick={handleOpenSheet}>
             <Sparkles size={15} color="var(--accent)" /> Quick Bulk Stock Count
@@ -1484,8 +3789,34 @@ export function InventoryPage() {
           </button>
         </div>
       </PageHeader>
+
+      {/* Stock Classification Tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button
+          className={`btn ${invTab === "ALL" ? "btn-primary" : "btn-secondary"}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setInvTab("ALL")}
+        >
+          All Stock ({(list.data ?? []).length})
+        </button>
+        <button
+          className={`btn ${invTab === "RAW_CONSUMABLE" ? "btn-primary" : "btn-secondary"}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setInvTab("RAW_CONSUMABLE")}
+        >
+          🏭 Raw Materials & Gas ({(list.data ?? []).filter((r) => { const c = (r.product as any)?.classification; return c === "RAW_MATERIAL" || c === "CONSUMABLE"; }).length})
+        </button>
+        <button
+          className={`btn ${invTab === "FINISHED_GOOD" ? "btn-primary" : "btn-secondary"}`}
+          style={{ fontSize: 13 }}
+          onClick={() => setInvTab("FINISHED_GOOD")}
+        >
+          📦 Finished Goods ({(list.data ?? []).filter((r) => { const c = (r.product as any)?.classification; return !c || c === "FINISHED_GOOD"; }).length})
+        </button>
+      </div>
+
       <div className="card">
-        <DataTable columns={columns} data={list.data ?? []} loading={list.isLoading} error={list.error} searchFields={undefined} emptyIcon={<Archive size={48} />} emptyText="No inventory records" />
+        <DataTable columns={columns} data={filteredList} loading={list.isLoading} error={list.error} searchFields={undefined} emptyIcon={<Archive size={48} />} emptyText="No inventory records" />
       </div>
 
       {/* Single Opening Stock Modal */}
@@ -1500,27 +3831,32 @@ export function InventoryPage() {
         }
       >
         <div className="form-grid">
-          <InputGroup label="Item">
-            <SearchableSelect
-              placeholder="Search and select item..."
-              options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name, sublabel: p.sku }))}
-              value={form.productId}
-              onChange={(val) => setForm({ ...form, productId: val })}
-            />
-          </InputGroup>
-          <InputGroup label="Warehouse">
-            <SearchableSelect
-              placeholder="Search and select warehouse..."
-              options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
-              value={form.warehouseId}
-              onChange={(val) => setForm({ ...form, warehouseId: val })}
-            />
-          </InputGroup>
-          <InputGroup label="Quantity">
-            <NumberStepper
+          <SmartEntitySelect
+            label="Item *"
+            entity="product"
+            placeholder="Search and select item..."
+            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name, sublabel: p.sku }))}
+            value={form.productId}
+            onChange={(val) => setForm({ ...form, productId: val })}
+          />
+          <SmartEntitySelect
+            label="Warehouse *"
+            entity="warehouse"
+            placeholder="Search and select warehouse..."
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+            value={form.warehouseId}
+            onChange={(val) => setForm({ ...form, warehouseId: val })}
+          />
+          <InputGroup label="Quantity *">
+            <input
+              className="input-field"
+              type="number"
+              min="0.001"
+              step="any"
+              placeholder="e.g. 50 or 2.5"
               value={form.quantity}
-              onChange={(val) => setForm({ ...form, quantity: String(val) })}
-              min={1}
+              onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+              required
             />
           </InputGroup>
         </div>
@@ -1577,10 +3913,14 @@ export function InventoryPage() {
                         <td><strong style={{ fontSize: 13 }}>{p.name}</strong></td>
                         <td><span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{p.sku}</span></td>
                         <td style={{ textAlign: "right" }}>
-                          <NumberStepper
+                          <input
+                            type="number"
+                            className="input-field"
+                            min="0"
+                            step="any"
+                            style={{ width: 110, textAlign: "right", fontSize: 13, padding: "4px 8px" }}
                             value={currentVal}
-                            onChange={(val) => setStockCounts({ ...stockCounts, [p.id]: String(val) })}
-                            min={0}
+                            onChange={(e) => setStockCounts({ ...stockCounts, [p.id]: e.target.value })}
                           />
                         </td>
                       </tr>
@@ -1644,20 +3984,29 @@ export function AdjustmentsPage() {
         }
       >
         <div className="form-grid form-grid-2">
-          <InputGroup label="Item">
-            <select className="input-field" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
-              <option value="">Select item…</option>
-              {(products.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </InputGroup>
-          <InputGroup label="Warehouse">
-            <select className="input-field" value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}>
-              <option value="">Select warehouse…</option>
-              {(warehouses.data ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Item *"
+            entity="product"
+            placeholder="Select item…"
+            value={form.productId}
+            onChange={(val) => setForm({ ...form, productId: val })}
+            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          />
+          <SmartEntitySelect
+            label="Warehouse *"
+            entity="warehouse"
+            placeholder="Select warehouse…"
+            value={form.warehouseId}
+            onChange={(val) => setForm({ ...form, warehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
           <InputGroup label="Quantity Delta (+/-)">
-            <input className="input-field" type="number" value={form.quantityDelta} onChange={(e) => setForm({ ...form, quantityDelta: e.target.value })} />
+            <NumberStepper
+              value={form.quantityDelta}
+              onChange={(val) => setForm({ ...form, quantityDelta: String(val) })}
+              step={1}
+              size="md"
+            />
           </InputGroup>
           <InputGroup label="Reason">
             <input className="input-field" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
@@ -1717,26 +4066,39 @@ export function TransfersPage() {
         }
       >
         <div className="form-grid form-grid-2">
-          <InputGroup label="From Warehouse">
-            <select className="input-field" value={form.fromWarehouseId} onChange={(e) => setForm({ ...form, fromWarehouseId: e.target.value })}>
-              <option value="">Select…</option>
-              {(warehouses.data ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </InputGroup>
-          <InputGroup label="To Warehouse">
-            <select className="input-field" value={form.toWarehouseId} onChange={(e) => setForm({ ...form, toWarehouseId: e.target.value })}>
-              <option value="">Select…</option>
-              {(warehouses.data ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </InputGroup>
-          <InputGroup label="Item">
-            <select className="input-field" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
-              <option value="">Select…</option>
-              {(products.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="From Warehouse *"
+            entity="warehouse"
+            placeholder="Select source warehouse…"
+            value={form.fromWarehouseId}
+            onChange={(val) => setForm({ ...form, fromWarehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
+          <SmartEntitySelect
+            label="To Warehouse *"
+            entity="warehouse"
+            placeholder="Select destination warehouse…"
+            value={form.toWarehouseId}
+            onChange={(val) => setForm({ ...form, toWarehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
+          <SmartEntitySelect
+            label="Item *"
+            entity="product"
+            placeholder="Select item…"
+            value={form.productId}
+            onChange={(val) => setForm({ ...form, productId: val })}
+            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          />
           <InputGroup label="Quantity">
-            <input className="input-field" type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+            <NumberStepper
+              value={form.quantity}
+              onChange={(val) => setForm({ ...form, quantity: String(val) })}
+              min={1}
+              step={1}
+              size="md"
+              quickAdd={[5, 10, 50]}
+            />
           </InputGroup>
         </div>
       </Modal>
@@ -2220,11 +4582,36 @@ export function PrintEstimateModal({
 
   const handleWhatsAppShare = () => {
     const phone = (customer.phone || "").replace(/\D/g, "");
-    const text = `Hello ${customer.name || "Customer"},\n\nHere is your official Price Estimate Quote *${estimate.number}* from OSCAR AUTO FLUX.\n\n*Total Quote Amount:* ₹${total.toLocaleString("en-IN")}\n*Validity:* Valid for 30 Days\n\nPlease let us know if you would like us to confirm and process this order.\n\nThank you!`;
+    const liveAppUrl = getPublicAppUrl();
+    const trackUrl = `${liveAppUrl}/track-order/${estimate.id}`;
+    const text = [
+      `Hello ${customer.name || "Customer"},`,
+      ``,
+      `Here is your official Price Estimate Quote *${estimate.number}* from *OSCAR AUTO FLUX*.`,
+      ``,
+      `*Total Quote Amount:* ₹${total.toLocaleString("en-IN")}`,
+      `*Validity:* Valid for 30 Days`,
+      ``,
+      `🔗 *CLICK LINK TO CONFIRM & TRACK ORDER:*`,
+      ``,
+      trackUrl,
+      ``,
+      `*(Clicking this link opens your live order tracker and instantly registers your order confirmation with our factory team)*`,
+      ``,
+      `📞 For any enquiry, call or WhatsApp +91 94432 51863`,
+      `Thank you!`
+    ].join("\n");
     const url = phone
       ? `https://wa.me/${phone.length === 10 ? "91" + phone : phone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
+  };
+
+  const handleCopyTrackingLink = () => {
+    const liveAppUrl = getPublicAppUrl();
+    const trackUrl = `${liveAppUrl}/track-order/${estimate.id}`;
+    navigator.clipboard.writeText(trackUrl);
+    toast("Live Tracking & Confirmation link copied to clipboard!");
   };
 
   const handleEmailShare = async () => {
@@ -2238,7 +4625,7 @@ export function PrintEstimateModal({
     try {
       if (estimate.id) {
         await api.post(`/estimates/${estimate.id}/send-email`);
-        toast(`Price Quotation (${estimate.number}) successfully emailed to ${email}!`);
+        toast(`Price Quotation (${estimate.number}) with Live Tracking link emailed to ${email}!`);
       }
     } catch (err: any) {
       toast(err.response?.data?.message ?? "Could not send email quotation.", "error");
@@ -2256,17 +4643,20 @@ export function PrintEstimateModal({
       onClose={onClose}
       title={`Price Estimate Quote PDF — ${estimate.number}`}
       footer={
-        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="button" className="btn btn-secondary" onClick={handleWhatsAppShare} style={{ background: "#16a34a", color: "#fff", border: "none" }}>
-              💬 Share on WhatsApp
+              💬 Share WhatsApp Link
             </button>
             <button type="button" className="btn btn-secondary" disabled={sendingEmail} onClick={handleEmailShare}>
-              {sendingEmail ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "✉️ Email Quotation"}
+              {sendingEmail ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "✉️ Send Email"}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={handleCopyTrackingLink}>
+              🔗 Copy Customer Link
             </button>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-secondary" onClick={onClose}>Close</button>
             <button className="btn btn-primary" onClick={handlePrint}>
               <Printer size={15} /> Print / Save PDF
@@ -2503,6 +4893,19 @@ export function EstimatesPage() {
       render: (r) => (
         <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
           <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              const trackUrl = `${getPublicAppUrl()}/track-order/${r.id}`;
+              navigator.clipboard.writeText(trackUrl);
+              toast("Live Customer Order Tracking & Confirmation Link copied!");
+            }}
+            title="Copy Public Customer Tracking Link"
+          >
+            🔗 Link
+          </button>
+          <button
             className="btn btn-secondary btn-sm"
             onClick={(e) => { e.stopPropagation(); setPrintEstimate(r); }}
             title="View, Print PDF or Send via WhatsApp / Email"
@@ -2560,32 +4963,23 @@ export function EstimatesPage() {
         }
       >
         <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
-          <InputGroup label="Customer *">
-            <select
-              className="input-field"
-              value={form.customerId}
-              onChange={(e) => setForm({ ...form, customerId: e.target.value })}
-              required
-            >
-              <option value="">Select customer…</option>
-              {(customers.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Customer *"
+            entity="customer"
+            placeholder="Select or search customer…"
+            value={form.customerId}
+            onChange={(val) => setForm({ ...form, customerId: val })}
+            options={(customers.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.state }))}
+          />
 
-          <InputGroup label="Dispatch Warehouse">
-            <select
-              className="input-field"
-              value={form.warehouseId}
-              onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
-            >
-              <option value="">Select warehouse (optional)…</option>
-              {(warehouses.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>{w.name}</option>
-              ))}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Dispatch Warehouse"
+            entity="warehouse"
+            placeholder="Select or search warehouse…"
+            value={form.warehouseId}
+            onChange={(val) => setForm({ ...form, warehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
         </div>
 
         <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
@@ -2621,6 +5015,7 @@ export function LineItemBuilder({
   mode?: "selling" | "purchasing";
   customerState?: string;
 }) {
+  const [quickProductIdx, setQuickProductIdx] = useState<number | null>(null);
   const stateStr = (customerState || "").toLowerCase().trim();
   const isTN = !stateStr || stateStr.includes("tamil") || stateStr.includes("tn") || stateStr.startsWith("33");
 
@@ -2690,9 +5085,28 @@ export function LineItemBuilder({
         <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
           <Boxes size={16} color="var(--accent)" /> Multiple Items & Per-Item Tax Breakdown ({lines.length})
         </label>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={addLine}>
-          <Plus size={13} /> Add Item Line
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-ghost"
+            style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, padding: "2px 8px" }}
+            onClick={() => setQuickProductIdx(lines.length - 1 >= 0 ? lines.length - 1 : 0)}
+          >
+            ⚡ + Quick Add Item
+          </button>
+          <a
+            href="/products"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: 11, color: "var(--text-muted)", textDecoration: "none" }}
+            title="Open items catalog page in new tab"
+          >
+            Catalog ↗
+          </a>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={addLine}>
+            <Plus size={13} /> Add Item Line
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2716,7 +5130,18 @@ export function LineItemBuilder({
               }}
             >
               <div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>Item *</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Item *</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: "0 4px", fontSize: 10, color: "var(--accent)", fontWeight: 700, height: "auto" }}
+                    onClick={() => setQuickProductIdx(idx)}
+                    title="Quickly add a missing item right here"
+                  >
+                    + New
+                  </button>
+                </div>
                 <select
                   className="input-field"
                   style={{ fontSize: 13, padding: "6px 8px" }}
@@ -2724,23 +5149,37 @@ export function LineItemBuilder({
                   onChange={(e) => updateLine(idx, "productId", e.target.value)}
                 >
                   <option value="">Select item…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  {products
+                    .slice()
+                    .sort((a: any, b: any) => {
+                      if (mode === "selling") {
+                        if (a.classification === "FINISHED_GOOD" && b.classification !== "FINISHED_GOOD") return -1;
+                        if (b.classification === "FINISHED_GOOD" && a.classification !== "FINISHED_GOOD") return 1;
+                      } else {
+                        if (a.classification !== "FINISHED_GOOD" && b.classification === "FINISHED_GOOD") return -1;
+                        if (b.classification !== "FINISHED_GOOD" && a.classification === "FINISHED_GOOD") return 1;
+                      }
+                      return (a.name || "").localeCompare(b.name || "");
+                    })
+                    .map((p: any) => {
+                      const tag = p.classification === "FINISHED_GOOD" ? "📦 [Finished Good]" : p.classification === "CONSUMABLE" ? "⚡ [Consumable]" : "🏭 [Raw Material]";
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {tag} {p.name}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
               <div>
                 <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>Qty *</span>
-                <input
-                  className="input-field"
-                  style={{ fontSize: 13, padding: "6px 8px" }}
-                  type="number"
-                  min="1"
+                <NumberStepper
                   value={line.quantity}
-                  onChange={(e) => updateLine(idx, "quantity", Math.max(1, Number(e.target.value)))}
+                  onChange={(val) => updateLine(idx, "quantity", val)}
+                  min={0.001}
+                  step={1}
+                  size="sm"
                 />
               </div>
 
@@ -2748,14 +5187,13 @@ export function LineItemBuilder({
                 <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 2 }}>
                   {mode === "selling" ? "Unit Price (₹)" : "Unit Cost (₹)"}
                 </span>
-                <input
-                  className="input-field"
-                  style={{ fontSize: 13, padding: "6px 8px" }}
-                  type="number"
-                  min="0"
-                  step="0.01"
+                <NumberStepper
                   value={line.unitPrice}
-                  onChange={(e) => updateLine(idx, "unitPrice", Number(e.target.value))}
+                  onChange={(val) => updateLine(idx, "unitPrice", val)}
+                  min={0}
+                  step={10}
+                  prefix="₹"
+                  size="sm"
                 />
               </div>
 
@@ -2855,6 +5293,17 @@ export function LineItemBuilder({
           Grand Total: <span style={{ color: "var(--success)" }}>{money(grandTotal)}</span>
         </div>
       </div>
+
+      <QuickCreateProductModal
+        open={quickProductIdx !== null}
+        defaultClassification={mode === "selling" ? "FINISHED_GOOD" : "RAW_MATERIAL"}
+        onClose={() => setQuickProductIdx(null)}
+        onCreated={(newProd) => {
+          if (quickProductIdx !== null) {
+            updateLine(quickProductIdx, "productId", newProd.id);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -3172,18 +5621,22 @@ export function SalesOrdersPage() {
         }
       >
         <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
-          <InputGroup label="Customer *">
-            <select className="input-field" value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} required>
-              <option value="">Select customer…</option>
-              {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </InputGroup>
-          <InputGroup label="Dispatch Warehouse *">
-            <select className="input-field" value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} required>
-              <option value="">Select warehouse…</option>
-              {(warehouses.data ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Customer *"
+            entity="customer"
+            placeholder="Select or search customer…"
+            value={form.customerId}
+            onChange={(val) => setForm({ ...form, customerId: val })}
+            options={(customers.data ?? []).map((c) => ({ value: c.id, label: c.name, sublabel: c.state }))}
+          />
+          <SmartEntitySelect
+            label="Dispatch Warehouse *"
+            entity="warehouse"
+            placeholder="Select or search warehouse…"
+            value={form.warehouseId}
+            onChange={(val) => setForm({ ...form, warehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
         </div>
 
         <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
@@ -4529,18 +6982,22 @@ export function PurchaseOrdersPage() {
         }
       >
         <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
-          <InputGroup label="Vendor *">
-            <select className="input-field" value={form.vendorId} onChange={(e) => setForm({ ...form, vendorId: e.target.value })} required>
-              <option value="">Select vendor…</option>
-              {(vendors.data ?? []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </InputGroup>
-          <InputGroup label="Receiving Warehouse *">
-            <select className="input-field" value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} required>
-              <option value="">Select warehouse…</option>
-              {(warehouses.data ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Vendor *"
+            entity="vendor"
+            placeholder="Select or search vendor…"
+            value={form.vendorId}
+            onChange={(val) => setForm({ ...form, vendorId: val })}
+            options={(vendors.data ?? []).map((v) => ({ value: v.id, label: v.name }))}
+          />
+          <SmartEntitySelect
+            label="Receiving Warehouse *"
+            entity="warehouse"
+            placeholder="Select or search warehouse…"
+            value={form.warehouseId}
+            onChange={(val) => setForm({ ...form, warehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
         </div>
 
         <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="purchasing" />
@@ -4845,35 +7302,23 @@ export function PurchaseReturnsPage() {
         }
       >
         <div className="form-grid form-grid-2">
-          <InputGroup label="Vendor">
-            <select
-              className="input-field"
-              value={form.vendorId}
-              onChange={(e) => setForm({ ...form, vendorId: e.target.value })}
-            >
-              <option value="">Select vendor…</option>
-              {(vendors.data ?? []).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Vendor *"
+            entity="vendor"
+            placeholder="Select vendor…"
+            value={form.vendorId}
+            onChange={(val) => setForm({ ...form, vendorId: val })}
+            options={(vendors.data ?? []).map((v) => ({ value: v.id, label: v.name }))}
+          />
 
-          <InputGroup label="Warehouse">
-            <select
-              className="input-field"
-              value={form.warehouseId}
-              onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
-            >
-              <option value="">Select warehouse…</option>
-              {(warehouses.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Warehouse *"
+            entity="warehouse"
+            placeholder="Select warehouse…"
+            value={form.warehouseId}
+            onChange={(val) => setForm({ ...form, warehouseId: val })}
+            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
 
           <InputGroup label="Purchase Order (Optional)">
             <select
@@ -4890,20 +7335,14 @@ export function PurchaseReturnsPage() {
             </select>
           </InputGroup>
 
-          <InputGroup label="Item to Return">
-            <select
-              className="input-field"
-              value={form.productId}
-              onChange={(e) => setForm({ ...form, productId: e.target.value })}
-            >
-              <option value="">Select item…</option>
-              {(products.data ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </InputGroup>
+          <SmartEntitySelect
+            label="Item to Return *"
+            entity="product"
+            placeholder="Select item…"
+            value={form.productId}
+            onChange={(val) => setForm({ ...form, productId: val })}
+            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          />
 
           <InputGroup label="Return Quantity">
             <input
@@ -5421,6 +7860,1359 @@ export function BillsPage() {
           </div>
         )}
       </Modal>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// FACTORY MANUFACTURING & PRODUCTION PAGE
+// ─────────────────────────────────────────────────────────
+export function ManufacturingPage() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [tab, setTab] = useState<"daily-log" | "monthly-analytics" | "produce" | "history" | "recipes">("daily-log");
+
+  const products = useList<any>("products", "/products");
+  const warehouses = useList<any>("wh", "/warehouses");
+  const runs = useList<any>("prodRuns", "/inventory/production-runs");
+
+  const finishedGoods = (products.data ?? []).filter(
+    (p: any) => !p.classification || p.classification === "FINISHED_GOOD"
+  );
+  const rawMaterials = (products.data ?? []).filter(
+    (p: any) => p.classification === "RAW_MATERIAL" || p.classification === "CONSUMABLE"
+  );
+
+  // ── Core Production Selection States ──
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
+  const [produceQty, setProduceQty] = useState<string>("10");
+  const [laborCost, setLaborCost] = useState<string>("0");
+  const [overheadCost, setOverheadCost] = useState<string>("0");
+  const [notes, setNotes] = useState<string>("");
+  const [recipeProduct, setRecipeProduct] = useState<any | null>(null);
+
+  // ── Daily Production Notebook State (End of Day Inward & Outward) ──
+  const [logDate, setLogDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [logWarehouseId, setLogWarehouseId] = useState<string>("");
+  const [logNotes, setLogNotes] = useState<string>("");
+  const [outwardItems, setOutwardItems] = useState<Array<{ productId: string; quantity: number }>>([
+    { productId: "", quantity: 10 },
+  ]);
+  const [inwardItems, setInwardItems] = useState<Array<{ productId: string; quantity: number }>>([
+    { productId: "", quantity: 10 },
+  ]);
+
+  // Auto-calculate suggested inward materials from recipes:
+  const handleAutoCalculateInwards = () => {
+    const sumMap = new Map<string, number>();
+    for (const o of outwardItems) {
+      if (!o.productId || !Number(o.quantity)) continue;
+      const p = (products.data ?? []).find((x: any) => x.id === o.productId);
+      if (p?.components) {
+        for (const c of p.components) {
+          const prev = sumMap.get(c.childProductId) ?? 0;
+          sumMap.set(c.childProductId, prev + Number(c.quantity) * Number(o.quantity));
+        }
+      }
+    }
+    if (sumMap.size === 0) {
+      toast("No recipes found for the selected finished goods. Please select inward materials manually.", "warn");
+      return;
+    }
+    const newInwards = Array.from(sumMap.entries()).map(([childProductId, qty]) => ({
+      productId: childProductId,
+      quantity: Number(qty.toFixed(3)),
+    }));
+    setInwardItems(newInwards);
+    toast(`Auto-calculated ${newInwards.length} inward materials from recipes! You can adjust counts as needed.`);
+  };
+
+  const postDailyLog = useMutation({
+    mutationFn: () =>
+      api.post("/inventory/daily-production-log", {
+        warehouseId: logWarehouseId || selectedWarehouseId,
+        date: logDate,
+        notes: logNotes.trim() || undefined,
+        outwards: outwardItems.filter((o) => o.productId && Number(o.quantity) > 0),
+        inwards: inwardItems.filter((i) => i.productId && Number(i.quantity) > 0),
+      }),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["inv"] });
+      qc.invalidateQueries({ queryKey: ["prodRuns"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["monthlyAnalytics"] });
+      toast(`✅ Daily production logged (${res.data?.logBatchNumber})! Finished goods added & raw materials deducted.`);
+      setLogNotes("");
+      setTab("monthly-analytics");
+    },
+    onError: (err: any) => toast(err.response?.data?.message ?? "Failed to save daily log", "error"),
+  });
+
+  // ── Monthly Analytics State ──
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+
+  const monthlyAnalytics = useQuery({
+    queryKey: ["monthlyAnalytics", selectedYear, selectedMonth, selectedWarehouseId],
+    queryFn: async () => {
+      const res = await api.get("/inventory/production-monthly-analytics", {
+        params: {
+          year: selectedYear,
+          month: selectedMonth,
+          warehouseId: selectedWarehouseId || undefined,
+        },
+      });
+      return res.data;
+    },
+    enabled: tab === "monthly-analytics",
+  });
+
+  // Auto-select warehouse
+  useEffect(() => {
+    if (!selectedWarehouseId && warehouses.data?.length) {
+      setSelectedWarehouseId(warehouses.data[0].id);
+    }
+    if (!logWarehouseId && warehouses.data?.length) {
+      setLogWarehouseId(warehouses.data[0].id);
+    }
+  }, [warehouses.data, selectedWarehouseId, logWarehouseId]);
+
+  // Auto-select finished good
+  useEffect(() => {
+    if (!selectedProductId && finishedGoods.length) {
+      setSelectedProductId(finishedGoods[0].id);
+    }
+  }, [finishedGoods, selectedProductId]);
+
+  const selectedProduct = (products.data ?? []).find((p: any) => p.id === selectedProductId);
+
+  // Live feasibility query
+  const feasibility = useQuery({
+    queryKey: ["feasibility", selectedProductId, selectedWarehouseId],
+    queryFn: async () => {
+      if (!selectedProductId) return null;
+      const res = await api.get(`/inventory/production-feasibility/${selectedProductId}`, {
+        params: { warehouseId: selectedWarehouseId },
+      });
+      return res.data;
+    },
+    enabled: Boolean(selectedProductId),
+  });
+
+  const produce = useMutation({
+    mutationFn: () => {
+      return api.post("/inventory/produce", {
+        productId: selectedProductId,
+        warehouseId: selectedWarehouseId,
+        quantityProduced: Number(produceQty),
+        laborCost: Number(laborCost) || 0,
+        overheadCost: Number(overheadCost) || 0,
+        notes: notes.trim() || undefined,
+      });
+    },
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["inv"] });
+      qc.invalidateQueries({ queryKey: ["prodRuns"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["feasibility"] });
+      toast(`🎉 Batch ${res.data?.runNumber} produced! ${produceQty} units added to inventory.`);
+      setNotes("");
+      setTab("history");
+    },
+    onError: (err: any) => toast(err.response?.data?.message ?? "Production failed", "error"),
+  });
+
+  // Calculate material costs for target batch
+  const componentList = feasibility.data?.components ?? [];
+  const totalRawMaterialBatchCost = componentList.reduce((acc: number, c: any) => {
+    return acc + (Number(c.costPrice) || 0) * (Number(c.recipeQty) || 0) * (Number(produceQty) || 0);
+  }, 0);
+
+  const totalBatchCost = totalRawMaterialBatchCost + (Number(laborCost) || 0) + (Number(overheadCost) || 0);
+  const unitManufacturedCost = Number(produceQty) > 0 ? totalBatchCost / Number(produceQty) : 0;
+
+  const runColumns: Column<any>[] = [
+    {
+      label: "Batch Run #",
+      render: (r) => (
+        <span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
+          {r.runNumber}
+        </span>
+      ),
+    },
+    {
+      label: "Date",
+      render: (r) =>
+        new Date(r.createdAt).toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+    },
+    { label: "Manufactured Item", render: (r) => <strong>{r.product?.name}</strong> },
+    { label: "Warehouse", render: (r) => r.warehouse?.name },
+    {
+      label: "Produced Units",
+      align: "right",
+      render: (r) => <strong style={{ color: "var(--accent)", fontSize: 14 }}>{r.quantityProduced}</strong>,
+    },
+    { label: "Unit Cost", align: "right", render: (r) => money(r.unitCost) },
+    { label: "Total Cost", align: "right", render: (r) => <strong>{money(r.totalCost)}</strong> },
+    {
+      label: "Status",
+      render: () => (
+        <span style={{ background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+          ✓ COMPLETED
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        title="🏭 Factory Manufacturing & Production"
+        subtitle="Transform raw materials and gas consumables into finished goods (Autoflex Welding Materials)"
+      >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            className={`btn ${tab === "daily-log" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setTab("daily-log")}
+          >
+            <BookOpen size={15} /> 📔 Daily Production Notebook (EOD)
+          </button>
+          <button
+            className={`btn ${tab === "monthly-analytics" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setTab("monthly-analytics")}
+          >
+            <BarChart3 size={15} /> 📊 Monthly Inward & Outward Analytics
+          </button>
+          <button
+            className={`btn ${tab === "produce" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setTab("produce")}
+          >
+            ⚡ Single Batch Run
+          </button>
+          <button
+            className={`btn ${tab === "history" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setTab("history")}
+          >
+            📜 Production History ({(runs.data?.data ?? []).length})
+          </button>
+          <button
+            className={`btn ${tab === "recipes" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setTab("recipes")}
+          >
+            🥣 Recipes / BOM ({finishedGoods.length})
+          </button>
+        </div>
+      </PageHeader>
+
+      {/* ── Thanglish Quick Hint Banner ── */}
+      <div style={{
+        background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
+        border: "1px solid #bfdbfe",
+        borderRadius: 12,
+        padding: "14px 18px",
+        marginBottom: 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap"
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <span style={{ fontSize: 24, lineHeight: 1 }}>📔</span>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <strong style={{ color: "#1e3a8a", fontSize: 14 }}>
+                Factory Daily Production & Consumption (EOD Log System)
+              </strong>
+              <InfoTooltip text="Daily evening factory mudiyum bothu, inniku yevlo materials use pannom and yevlo finished goods ready aachu nu ore digital page-la record panna intha system." align="left" />
+            </div>
+            <p style={{ margin: "3px 0 0", fontSize: 13, color: "#1e40af", lineHeight: 1.5 }}>
+              Daily evening notebook-la eludhurathuku bathila inga direct ah enter pannalam:
+              <strong> Inward (Raw Materials & Gas used)</strong> and <strong>Outward (Finished Goods ready aana counts)</strong>.
+              Ore click-la finished goods stock add aagidum, raw materials stock minus aagidum. Monthly reports auto-generate aagum!
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className={`btn btn-sm ${tab === "daily-log" ? "btn-primary" : "btn-ghost"}`}
+            onClick={() => setTab("daily-log")}
+          >
+            📔 Open Daily Notebook
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${tab === "monthly-analytics" ? "btn-primary" : "btn-ghost"}`}
+            onClick={() => setTab("monthly-analytics")}
+          >
+            📊 View Monthly Stats
+          </button>
+        </div>
+      </div>
+
+      {/* ── TAB 1: DAILY PRODUCTION NOTEBOOK (END OF DAY LOG) ── */}
+      {tab === "daily-log" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Header Controls: Date & Warehouse */}
+          <div className="card" style={{ padding: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <BookOpen size={18} color="var(--accent)" />
+                  Today's Factory Production & Consumption Log (EOD)
+                  <InfoTooltip text="Inniku factory shift-la consume aana raw materials and seithu muditha final products rendu side-layum record panna intha section use aagum." align="left" />
+                </h3>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
+                  Record actual materials consumed (Inward) and finished products ready (Outward) today.
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleAutoCalculateInwards}
+                  title="Auto-calculate required raw materials based on finished goods recipes"
+                >
+                  <Sparkles size={14} color="#d97706" /> 🪄 Auto-Calculate Inwards from Recipes
+                </button>
+                <InfoTooltip text="Inniku ready aana finished goods counts-ah paathu, BOM recipes padi thevaiana raw materials & gas-ah right side-la automatic ah calculate panni load pannum. Ungalukku yetha maari adjust-um pannikalam." align="right" />
+              </div>
+            </div>
+
+            <div className="form-grid form-grid-3">
+              <InputGroup label="Production Date *">
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ fontWeight: 600 }}
+                  value={logDate}
+                  onChange={(e) => setLogDate(e.target.value)}
+                />
+              </InputGroup>
+
+              <InputGroup label="Factory Warehouse / Godown *">
+                <select
+                  className="input-field"
+                  value={logWarehouseId || selectedWarehouseId}
+                  onChange={(e) => {
+                    setLogWarehouseId(e.target.value);
+                    setSelectedWarehouseId(e.target.value);
+                  }}
+                >
+                  {(warehouses.data ?? []).map((w: any) => (
+                    <option key={w.id} value={w.id}>
+                      🏢 {w.name} ({w.code})
+                    </option>
+                  ))}
+                </select>
+              </InputGroup>
+
+              <InputGroup label="Daily Shift / Batch Note">
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="e.g. Day Shift 4 workers, 2 flex lines active"
+                  value={logNotes}
+                  onChange={(e) => setLogNotes(e.target.value)}
+                />
+              </InputGroup>
+            </div>
+          </div>
+
+          {/* Two-Column Grid: Outwards vs Inwards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 20 }}>
+            {/* Left Card: 📤 Outwards (Finished Goods) */}
+            <div className="card" style={{ padding: 20, borderTop: "4px solid #10b981" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div>
+                  <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "#065f46", display: "flex", alignItems: "center", gap: 6 }}>
+                    📤 Outward Finished Goods (Ready aana Products)
+                    <InfoTooltip text="Inniku factory-la manufacture panni ready aana final goods (Flex coils, rods). Save panna udane stock increase (+) aagidum." align="left" />
+                  </h4>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    Products that workers finished producing today (Stock will increase +)
+                  </span>
+                </div>
+                <span style={{ background: "#d1fae5", color: "#065f46", padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>
+                  {outwardItems.length} Product{outwardItems.length > 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {outwardItems.map((item, idx) => {
+                  const sel = (products.data ?? []).find((p: any) => p.id === item.productId);
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        background: "#f8fafc",
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #e2e8f0",
+                      }}
+                    >
+                      <div style={{ flex: 2 }}>
+                        <select
+                          className="input-field"
+                          style={{ fontSize: 13, fontWeight: 600 }}
+                          value={item.productId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOutwardItems((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
+                            );
+                          }}
+                        >
+                          <option value="">-- Select Finished Product --</option>
+                          {finishedGoods.map((p: any) => (
+                            <option key={p.id} value={p.id}>
+                              📦 {p.name} ({p.sku})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div style={{ width: 175 }}>
+                        <NumberStepper
+                          value={item.quantity || 0}
+                          onChange={(val) => {
+                            setOutwardItems((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, quantity: val } : r))
+                            );
+                          }}
+                          min={0.1}
+                          step={1}
+                          unit={sel?.unitOfMeasure || sel?.unit || "pcs"}
+                          quickAdd={[5, 10, 50]}
+                          size="md"
+                        />
+                      </div>
+
+                      {outwardItems.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: "#ef4444", padding: 6 }}
+                          onClick={() => setOutwardItems((prev) => prev.filter((_, i) => i !== idx))}
+                          title="Remove item"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ alignSelf: "flex-start", marginTop: 6 }}
+                  onClick={() => setOutwardItems((prev) => [...prev, { productId: "", quantity: 10 }])}
+                >
+                  <Plus size={14} /> + Add Another Finished Product
+                </button>
+              </div>
+            </div>
+
+            {/* Right Card: 📥 Inwards (Raw Materials Consumed) */}
+            <div className="card" style={{ padding: 20, borderTop: "4px solid #6366f1" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div>
+                  <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "#3730a3", display: "flex", alignItems: "center", gap: 6 }}>
+                    📥 Inward Raw Materials (Used aana Materials)
+                    <InfoTooltip text="Inniku products seiyum bothu actual-ah consume aana Wire rod, Chemical flux & Shielding gas cylinders. Save panna udane stock deduct (-) aagidum." align="left" />
+                  </h4>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    Wire, chemical flux, shielding gas consumed today (Stock will decrease -)
+                  </span>
+                </div>
+                <span style={{ background: "#e0e7ff", color: "#3730a3", padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>
+                  {inwardItems.length} Material{inwardItems.length > 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {inwardItems.map((item, idx) => {
+                  const sel = (products.data ?? []).find((p: any) => p.id === item.productId);
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        background: "#f8fafc",
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #e2e8f0",
+                      }}
+                    >
+                      <div style={{ flex: 2 }}>
+                        <select
+                          className="input-field"
+                          style={{ fontSize: 13, fontWeight: 600 }}
+                          value={item.productId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setInwardItems((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
+                            );
+                          }}
+                        >
+                          <option value="">-- Select Raw Material / Consumable --</option>
+                          {products.data?.map((p: any) => (
+                            <option key={p.id} value={p.id}>
+                              {p.classification === "FINISHED_GOOD" ? "📦" : "⚙️"} {p.name} ({p.sku})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div style={{ width: 175 }}>
+                        <NumberStepper
+                          value={item.quantity || 0}
+                          onChange={(val) => {
+                            setInwardItems((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, quantity: val } : r))
+                            );
+                          }}
+                          min={0.01}
+                          step={0.5}
+                          unit={sel?.unitOfMeasure || sel?.unit || "kg"}
+                          quickAdd={[1, 5, 10]}
+                          size="md"
+                        />
+                      </div>
+
+                      {inwardItems.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: "#ef4444", padding: 6 }}
+                          onClick={() => setInwardItems((prev) => prev.filter((_, i) => i !== idx))}
+                          title="Remove item"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ alignSelf: "flex-start", marginTop: 6 }}
+                  onClick={() => setInwardItems((prev) => [...prev, { productId: "", quantity: 10 }])}
+                >
+                  <Plus size={14} /> + Add Another Raw Material / Gas
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Confirmation Bar */}
+          <div
+            className="card"
+            style={{
+              padding: "16px 22px",
+              background: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 16,
+              border: "1px solid var(--border)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 18 }}>📤</span>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>OUTWARDS (Ready Goods)</span>
+                    <InfoTooltip text="Inniku manufacture aana motha finished products count and pieces." />
+                  </div>
+                  <strong style={{ fontSize: 14, color: "#059669" }}>
+                    {outwardItems.filter((o) => o.productId && Number(o.quantity) > 0).length} Product(s) |{" "}
+                    {outwardItems.reduce((acc, o) => acc + (Number(o.quantity) || 0), 0)} Total Units
+                  </strong>
+                </div>
+              </div>
+              <div style={{ width: 1, height: 32, background: "#e2e8f0" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 18 }}>📥</span>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>INWARDS (Consumed Materials)</span>
+                    <InfoTooltip text="Inniku consume aana motha raw materials and shielding gas units." />
+                  </div>
+                  <strong style={{ fontSize: 14, color: "#4f46e5" }}>
+                    {inwardItems.filter((i) => i.productId && Number(i.quantity) > 0).length} Material(s) |{" "}
+                    {inwardItems.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0)} Total Used
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ padding: "12px 28px", fontSize: 15, fontWeight: 700 }}
+              disabled={
+                postDailyLog.isPending ||
+                !outwardItems.some((o) => o.productId && Number(o.quantity) > 0) ||
+                !inwardItems.some((i) => i.productId && Number(i.quantity) > 0)
+              }
+              onClick={() => postDailyLog.mutate()}
+            >
+              {postDailyLog.isPending ? (
+                <span className="spinner" style={{ width: 16, height: 16 }} />
+              ) : (
+                <CheckCircle size={18} />
+              )}
+              🚀 Save Today's Notebook Log & Update Stock
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 2: MONTHLY INWARD & OUTWARD ANALYTICS ── */}
+      {tab === "monthly-analytics" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Month & Filter Controls */}
+          <div
+            className="card"
+            style={{
+              padding: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Calendar size={18} color="var(--accent)" />
+                <span style={{ fontWeight: 700, fontSize: 14 }}>Select Month & Year:</span>
+                <InfoTooltip text="Entha month-oda production and raw material consumption report venumo anga select pannikalam." align="left" />
+              </div>
+
+              <select
+                className="input-field"
+                style={{ width: 140, fontWeight: 600 }}
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              >
+                {[
+                  { v: 1, l: "January" },
+                  { v: 2, l: "February" },
+                  { v: 3, l: "March" },
+                  { v: 4, l: "April" },
+                  { v: 5, l: "May" },
+                  { v: 6, l: "June" },
+                  { v: 7, l: "July" },
+                  { v: 8, l: "August" },
+                  { v: 9, l: "September" },
+                  { v: 10, l: "October" },
+                  { v: 11, l: "November" },
+                  { v: 12, l: "December" },
+                ].map((m) => (
+                  <option key={m.v} value={m.v}>
+                    {m.l}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="input-field"
+                style={{ width: 100, fontWeight: 600 }}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+              >
+                {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="input-field"
+                style={{ width: 200 }}
+                value={selectedWarehouseId}
+                onChange={(e) => setSelectedWarehouseId(e.target.value)}
+              >
+                <option value="">🏢 All Warehouses</option>
+                {(warehouses.data ?? []).map((w: any) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name} ({w.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => window.print()}
+            >
+              <Printer size={15} /> 🖨️ Print / Export Monthly Report
+            </button>
+          </div>
+
+          {/* KPI Summary Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+            <div className="card" style={{ padding: 18, borderLeft: "4px solid #10b981", position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
+                  Total Outward Finished Goods Produced
+                </span>
+                <InfoTooltip text="Intha month factory-la motham produce aana finished goods count (Flex bundles, coils, items)." />
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#059669", marginTop: 4 }}>
+                {monthlyAnalytics.data?.summary?.totalOutwardQuantity ?? 0}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
+                Ready welding materials built this month
+              </span>
+            </div>
+
+            <div className="card" style={{ padding: 18, borderLeft: "4px solid #6366f1", position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
+                  Total Inward Raw Materials Consumed
+                </span>
+                <InfoTooltip text="Intha month finished goods produce seiyya consume aana Wire rod, Chemical flux & Shielding gas motha alavu." />
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#4f46e5", marginTop: 4 }}>
+                {monthlyAnalytics.data?.summary?.totalInwardQuantity ?? 0}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
+                Wire rod, flux & gas used this month
+              </span>
+            </div>
+
+            <div className="card" style={{ padding: 18, borderLeft: "4px solid #f59e0b", position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
+                  Active Production Days
+                </span>
+                <InfoTooltip text="Intha month-la factory ethana naatkal run aagi daily production log save pannirukom nu kaattum." />
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#d97706", marginTop: 4 }}>
+                {monthlyAnalytics.data?.summary?.activeDays ?? 0}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
+                Days with logged manufacturing runs
+              </span>
+            </div>
+
+            <div className="card" style={{ padding: 18, borderLeft: "4px solid #0284c7", position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
+                  Total Notebook Transactions
+                </span>
+                <InfoTooltip text="Intha month notebook ledger-la record aana motha stock movements entries count." />
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: "#0284c7", marginTop: 4 }}>
+                {monthlyAnalytics.data?.summary?.totalTransactions ?? 0}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
+                Ledger movements recorded
+              </span>
+            </div>
+          </div>
+
+          {/* Daily Trend Chart: Inward vs Outward */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <BarChart3 size={18} color="var(--accent)" />
+                Daily Factory Trend: Outward Produced vs Inward Consumed
+              </h4>
+              <InfoTooltip text="Month-la ovvoru naalum yevlo finished goods ready aachu (Green Bar) vs yevlo raw materials use aachu (Purple Bar) nu daily comparison bar graph." align="right" />
+            </div>
+
+            {monthlyAnalytics.isLoading ? (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+                Loading monthly trend chart…
+              </div>
+            ) : (monthlyAnalytics.data?.dailyTrend ?? []).length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontStyle: "italic" }}>
+                No production transactions recorded in this month. Use "Daily Production Notebook" tab to enter logs!
+              </div>
+            ) : (
+              <div style={{ width: "100%", height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyAnalytics.data.dailyTrend} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                      formatter={(val: any, name: any) => [
+                        `${val} units`,
+                        name === "outwards" ? "📤 Finished Goods Outward" : "📥 Raw Materials Inward",
+                      ]}
+                    />
+                    <Legend
+                      formatter={(value) =>
+                        value === "outwards" ? "📤 Finished Goods (Outward)" : "📥 Raw Materials Consumed (Inward)"
+                      }
+                    />
+                    <Bar dataKey="outwards" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="inwards" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Side-by-Side Breakdown Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
+            {/* Outward Breakdown */}
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "#065f46" }}>
+                  📤 Finished Goods Output Breakdown (This Month)
+                </h4>
+                <InfoTooltip text="Intha month entha entha finished product yevlo count produce aachu nu item-wise breakdown." align="right" />
+              </div>
+              {(monthlyAnalytics.data?.outwardBreakdown ?? []).length === 0 ? (
+                <div style={{ color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: 10 }}>
+                  No finished goods recorded.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {monthlyAnalytics.data.outwardBreakdown.map((b: any, idx: number) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 12px",
+                        background: "#f0fdf4",
+                        borderRadius: 6,
+                        border: "1px solid #dcfce7",
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: "#065f46" }}>{b.name}</span>
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{b.sku}</span>
+                      </div>
+                      <strong style={{ fontSize: 15, color: "#059669" }}>
+                        {b.quantity} {b.unit}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Inward Breakdown */}
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "#3730a3" }}>
+                  📥 Raw Materials Consumed Breakdown (This Month)
+                </h4>
+                <InfoTooltip text="Intha month entha entha raw material / gas yevlo consumption aachu nu item-wise breakdown." align="right" />
+              </div>
+              {(monthlyAnalytics.data?.inwardBreakdown ?? []).length === 0 ? (
+                <div style={{ color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: 10 }}>
+                  No inward materials recorded.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {monthlyAnalytics.data.inwardBreakdown.map((b: any, idx: number) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 12px",
+                        background: "#eef2ff",
+                        borderRadius: 6,
+                        border: "1px solid #e0e7ff",
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: "#3730a3" }}>{b.name}</span>
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{b.sku}</span>
+                      </div>
+                      <strong style={{ fontSize: 15, color: "#4f46e5" }}>
+                        {b.quantity} {b.unit}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Digital Notebook Ledger Table */}
+          <div className="card" style={{ padding: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <ClipboardList size={18} color="var(--accent)" />
+                Daily Digital Notebook Ledger (Month Logbook Entries)
+              </h4>
+              <InfoTooltip text="Paper note-la date pottu eludhina mathiri ovvoru transaction-um date, product, quantity & notes-oda irukkum digital ledger. Mela irukura print button click panni PDF-ah download pannalam." align="right" />
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table className="data-table" style={{ width: "100%", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th>Date & Time</th>
+                    <th>Type</th>
+                    <th>Product / Material</th>
+                    <th style={{ textAlign: "right" }}>Quantity</th>
+                    <th>Warehouse</th>
+                    <th>Reference / Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(monthlyAnalytics.data?.recentLedger ?? []).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
+                        No ledger transactions found for this month.
+                      </td>
+                    </tr>
+                  ) : (
+                    monthlyAnalytics.data.recentLedger.map((row: any) => (
+                      <tr key={row.id}>
+                        <td>{new Date(row.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                        <td>
+                          {row.type === "PRODUCTION_OUTPUT" ? (
+                            <span style={{ background: "#dcfce7", color: "#166534", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                              📤 OUTWARD (+)
+                            </span>
+                          ) : (
+                            <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                              📥 INWARD (-)
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 600 }}>{row.productName}</span>
+                          <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{row.sku}</span>
+                        </td>
+                        <td style={{ textAlign: "right", fontWeight: 700, color: row.type === "PRODUCTION_OUTPUT" ? "#16a34a" : "#dc2626" }}>
+                          {row.type === "PRODUCTION_OUTPUT" ? `+${row.quantity}` : `-${row.quantity}`} {row.unit}
+                        </td>
+                        <td>{row.warehouseName}</td>
+                        <td style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                          {row.referenceNumber || row.notes || "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Summary Metric Cards (for single batch produce & history) ── */}
+      {(tab === "produce" || tab === "history" || tab === "recipes") && (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>Total Production Batches</span>
+            <InfoTooltip text="Factory-la ithuvarai run aana total production batch runs count." />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", marginTop: 4 }}>
+            {(runs.data?.data ?? []).length}
+          </div>
+        </div>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>Finished Units Produced</span>
+            <InfoTooltip text="Production batches moolama ithuvarai total-ah ready aana finished units count." />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>
+            {(runs.data?.data ?? []).reduce((acc: number, r: any) => acc + (Number(r.quantityProduced) || 0), 0)}
+          </div>
+        </div>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>Active Product Recipes</span>
+            <InfoTooltip text="Raw material formula (BOM recipe) set pannirukura finished products count." />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#059669", marginTop: 4 }}>
+            {finishedGoods.filter((p: any) => (p.components?.length ?? 0) > 0).length} / {finishedGoods.length}
+          </div>
+        </div>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>Factory Stock Readiness</span>
+            <InfoTooltip text="Godown-la irukura raw materials-ah vachi ippo ethana units produce panna mudiyum nu automated readiness status." />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: (feasibility.data?.canProduce ?? 0) > 0 ? "var(--success)" : "#d97706", marginTop: 4 }}>
+            {feasibility.data?.hasRecipe
+              ? `${feasibility.data?.canProduce ?? 0} units can be built`
+              : "Recipe setup required"}
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* ── TAB 1: RUN PRODUCTION ── */}
+      {tab === "produce" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 20 }}>
+          {/* Left Column: Form & Ingredients Breakdown */}
+          <div className="card" style={{ padding: 20 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              ⚡ Start Production Batch
+              <InfoTooltip text="Oru specific finished item select panni, recipe formula padi exact batch run seithu stock auto-deduct panna." align="left" />
+            </h3>
+
+            <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
+              <InputGroup label="Finished Good to Produce *">
+                <select
+                  className="input-field"
+                  style={{ fontWeight: 600, fontSize: 14 }}
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                >
+                  {finishedGoods.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      📦 {p.name} ({p.sku})
+                    </option>
+                  ))}
+                </select>
+              </InputGroup>
+
+              <InputGroup label="Factory Warehouse (Godown) *">
+                <select
+                  className="input-field"
+                  value={selectedWarehouseId}
+                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                >
+                  {(warehouses.data ?? []).map((w: any) => (
+                    <option key={w.id} value={w.id}>
+                      🏢 {w.name} ({w.code})
+                    </option>
+                  ))}
+                </select>
+              </InputGroup>
+
+              <InputGroup label="Units to Produce *">
+                <NumberStepper
+                  value={produceQty}
+                  onChange={(v) => setProduceQty(String(v))}
+                  min={1}
+                  step={1}
+                  size="md"
+                  quickAdd={[10, 50, 100]}
+                />
+              </InputGroup>
+
+              <InputGroup label="Labor Cost (₹)">
+                <NumberStepper
+                  value={laborCost}
+                  onChange={(v) => setLaborCost(String(v))}
+                  min={0}
+                  step={50}
+                  prefix="₹"
+                  size="md"
+                  quickAdd={[100, 500]}
+                />
+              </InputGroup>
+
+              <InputGroup label="Machine / Power / Gas Overheads (₹)">
+                <NumberStepper
+                  value={overheadCost}
+                  onChange={(v) => setOverheadCost(String(v))}
+                  min={0}
+                  step={50}
+                  prefix="₹"
+                  size="md"
+                  quickAdd={[100, 500]}
+                />
+              </InputGroup>
+
+              <InputGroup label="Production Batch Notes">
+                <input
+                  className="input-field"
+                  placeholder="e.g. Morning shift run #1"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </InputGroup>
+            </div>
+
+            {/* Recipe Ingredients & Consumption Preview */}
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" }}>
+                  REQUIRED RAW MATERIALS & CONSUMABLES FOR {produceQty} UNITS
+                </span>
+                {selectedProduct && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 12, color: "var(--accent)" }}
+                    onClick={() => setRecipeProduct(selectedProduct)}
+                  >
+                    🥣 Edit Recipe Formula
+                  </button>
+                )}
+              </div>
+
+              {!feasibility.data?.hasRecipe ? (
+                <div style={{ padding: 24, textAlign: "center", background: "#fff7ed", border: "1px dashed #fed7aa", borderRadius: 8 }}>
+                  <AlertTriangle size={24} color="#d97706" style={{ margin: "0 auto 8px" }} />
+                  <div style={{ fontWeight: 600, color: "#92400e" }}>Recipe Formula Not Configured</div>
+                  <div style={{ fontSize: 13, color: "#b45309", marginTop: 4 }}>
+                    Please define which raw materials (wire, flux, gas) are needed to make <strong>{selectedProduct?.name}</strong>.
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    style={{ marginTop: 12 }}
+                    onClick={() => setRecipeProduct(selectedProduct)}
+                  >
+                    🥣 Configure Recipe Now
+                  </button>
+                </div>
+              ) : (
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                  <table className="data-table" style={{ width: "100%", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc" }}>
+                        <th>Ingredient</th>
+                        <th style={{ textAlign: "right" }}>Per Unit</th>
+                        <th style={{ textAlign: "right" }}>Batch Need</th>
+                        <th style={{ textAlign: "right" }}>Godown Stock</th>
+                        <th style={{ textAlign: "center" }}>Stock Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {componentList.map((c: any, idx: number) => {
+                        const neededForBatch = Number(c.recipeQty) * Number(produceQty);
+                        const isSufficient = Number(c.availableStock) >= neededForBatch;
+
+                        return (
+                          <tr key={idx}>
+                            <td>
+                              <span style={{ fontWeight: 600 }}>{c.childName}</span>
+                              <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{c.childSku}</span>
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              {c.recipeQty} {c.unit}
+                            </td>
+                            <td style={{ textAlign: "right", fontWeight: 700 }}>
+                              {neededForBatch} {c.unit}
+                            </td>
+                            <td style={{ textAlign: "right" }}>
+                              {c.availableStock} {c.unit}
+                            </td>
+                            <td style={{ textAlign: "center" }}>
+                              {isSufficient ? (
+                                <span style={{ background: "#dcfce7", color: "#166534", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                  ✓ In Stock
+                                </span>
+                              ) : (
+                                <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                  ⚠️ Shortage ({neededForBatch - c.availableStock} needed)
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Feasibility, Costing & Run Action */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Feasibility Alert Card */}
+            <div
+              className="card"
+              style={{
+                padding: 16,
+                background: (feasibility.data?.canProduce ?? 0) > 0 ? "#f0fdf4" : "#fff7ed",
+                border: `1px solid ${(feasibility.data?.canProduce ?? 0) > 0 ? "#bbf7d0" : "#fed7aa"}`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                {(feasibility.data?.canProduce ?? 0) > 0 ? (
+                  <CheckCircle size={18} color="#16a34a" />
+                ) : (
+                  <AlertTriangle size={18} color="#d97706" />
+                )}
+                <span style={{ fontWeight: 700, fontSize: 14, color: (feasibility.data?.canProduce ?? 0) > 0 ? "#166534" : "#92400e" }}>
+                  Max Feasible Production Output
+                </span>
+                <InfoTooltip text="Godown stock-ah check panni, intha warehouse-la max yevlo units manufacture panna mudiyum nu automated calculate pannum." />
+              </div>
+              <div style={{ fontSize: 13, color: (feasibility.data?.canProduce ?? 0) > 0 ? "#15803d" : "#b45309" }}>
+                Current raw material stock allows producing up to{" "}
+                <strong style={{ fontSize: 16 }}>{feasibility.data?.canProduce ?? 0} units</strong> in this warehouse.
+              </div>
+              {(feasibility.data?.bottlenecks ?? []).length > 0 && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#991b1b", background: "#fee2e2", padding: "6px 10px", borderRadius: 6 }}>
+                  ⚠️ Stock Bottleneck:{" "}
+                  <strong>{feasibility.data.bottlenecks.map((b: any) => b.childName).join(", ")}</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Costing Summary Card */}
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "var(--text-secondary)" }}>
+                  BATCH PRODUCTION COST ESTIMATE
+                </h4>
+                <InfoTooltip text="Raw material cost + worker labor cost + machine overheads serthu per-unit manufacturing cost calculate panna." align="right" />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--text-muted)" }}>Raw Material Cost:</span>
+                  <span>{money(totalRawMaterialBatchCost)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--text-muted)" }}>Labor Cost:</span>
+                  <span>{money(Number(laborCost) || 0)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--text-muted)" }}>Machine & Gas Overheads:</span>
+                  <span>{money(Number(overheadCost) || 0)}</span>
+                </div>
+                <hr style={{ margin: "4px 0", borderColor: "#f1f5f9" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700 }}>
+                  <span>Total Batch Cost:</span>
+                  <span style={{ color: "var(--accent)" }}>{money(totalBatchCost)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+                  <span>Manufactured Unit Cost:</span>
+                  <span>{money(unitManufacturedCost)} / unit</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 20 }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ width: "100%", padding: "12px", fontSize: 15, justifyContent: "center" }}
+                  disabled={produce.isPending || !feasibility.data?.hasRecipe || Number(produceQty) <= 0}
+                  onClick={() => produce.mutate()}
+                >
+                  {produce.isPending ? (
+                    <span className="spinner" style={{ width: 16, height: 16 }} />
+                  ) : (
+                    <Boxes size={18} />
+                  )}
+                  🚀 Produce {produceQty} Units & Deduct Stock
+                </button>
+                <span style={{ display: "block", textAlign: "center", fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+                  ✓ In 1 click: Raw materials deducted (-), Finished goods added (+)
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 2: PRODUCTION HISTORY ── */}
+      {tab === "history" && (
+        <div className="card">
+          <DataTable
+            columns={runColumns}
+            data={runs.data?.data ?? []}
+            loading={runs.isLoading}
+            error={runs.error}
+            searchFields={["runNumber"]}
+            emptyIcon={<Boxes size={48} />}
+            emptyText="No production runs recorded yet. Start your first production batch!"
+          />
+        </div>
+      )}
+
+      {/* ── TAB 3: BILL OF MATERIALS (BOM RECIPES) ── */}
+      {tab === "recipes" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+          {finishedGoods.map((fg: any) => {
+            const comps = fg.components ?? [];
+            return (
+              <div key={fg.id} className="card" style={{ padding: 18, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div>
+                      <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{fg.name}</h4>
+                      <span className="font-mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{fg.sku}</span>
+                    </div>
+                    <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                      Finished Good
+                    </span>
+                  </div>
+
+                  <div style={{ margin: "12px 0", fontSize: 13 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                      Recipe Ingredients ({comps.length}):
+                    </span>
+                    {comps.length === 0 ? (
+                      <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4, fontStyle: "italic" }}>
+                        No recipe configured yet.
+                      </div>
+                    ) : (
+                      <ul style={{ paddingLeft: 18, marginTop: 4, marginBottom: 0 }}>
+                        {comps.map((c: any, i: number) => (
+                          <li key={i} style={{ marginBottom: 2 }}>
+                            {c.quantity}x {c.child?.name || "Material"}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ paddingTop: 12, borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>Selling Price</span>
+                    <strong style={{ fontSize: 14 }}>{money(fg.sellingPrice)}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setRecipeProduct(fg)}
+                  >
+                    🥣 {comps.length > 0 ? "Edit Formula" : "+ Set Formula"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Recipe Formula Modal */}
+      <RecipeModal
+        product={recipeProduct}
+        open={recipeProduct !== null}
+        onClose={() => setRecipeProduct(null)}
+      />
     </div>
   );
 }

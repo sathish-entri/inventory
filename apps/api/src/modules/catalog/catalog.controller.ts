@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import { CatalogService } from "./catalog.service";
@@ -6,7 +6,7 @@ import { CurrentUser, type AuthUser } from "../../common/current-user.decorator"
 import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
 import { PaginationQueryDto } from "../../common/pagination";
-import { CreateProductDto, CreateWarehouseDto, NameDto, PartyDto, UnitDto } from "./dto";
+import { CreateProductDto, CreateWarehouseDto, NameDto, PartyDto, UnitDto, ProductQueryDto, UpdateProductDto } from "./dto";
 
 @ApiTags("catalog")
 @ApiBearerAuth()
@@ -97,7 +97,7 @@ export class CatalogController {
 
   @Get("products")
   @RequirePermissions("product:read")
-  listProducts(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+  listProducts(@CurrentUser() user: AuthUser, @Query() query: ProductQueryDto) {
     return this.catalog.listProducts(user.organizationId, query);
   }
 
@@ -109,8 +109,14 @@ export class CatalogController {
 
   @Patch("products/:id")
   @RequirePermissions("product:update")
-  updateProduct(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() dto: CreateProductDto) {
+  updateProduct(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() dto: UpdateProductDto) {
     return this.catalog.updateProduct(user.organizationId, id, dto);
+  }
+
+  @Delete("products/:id")
+  @RequirePermissions("product:delete")
+  deleteProduct(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.catalog.deleteProduct(user.organizationId, id);
   }
 
   @Post("customers")

@@ -14,6 +14,12 @@ enum ProductType {
   COMPOSITE
 }
 
+enum ItemClassification {
+  RAW_MATERIAL
+  CONSUMABLE
+  FINISHED_GOOD
+}
+
 enum InventoryTxnType {
   OPENING_STOCK
   PURCHASE_RECEIVE
@@ -23,6 +29,8 @@ enum InventoryTxnType {
   STOCK_TRANSFER_IN
   SALES_RETURN
   PURCHASE_RETURN
+  PRODUCTION_CONSUMPTION
+  PRODUCTION_OUTPUT
 }
 
 enum SalesOrderStatus {
@@ -138,6 +146,7 @@ model Organization {
   integrations           IntegrationConfig[]
   numberSequences        NumberSequence[]
   analyticsSnapshots     AnalyticsSnapshot[]
+  productionRuns         ProductionRun[]
 }
 
 model User {
@@ -160,6 +169,7 @@ model User {
 
   @@unique([organizationId, email])
   @@index([organizationId])
+  @@index([email])
 }
 
 model Role {
@@ -285,6 +295,7 @@ model Product {
   barcode           String?
   description       String?
   type              ProductType @default(BASIC)
+  classification    ItemClassification @default(FINISHED_GOOD)
   categoryId        String?
   brandId           String?
   unitId            String?
@@ -311,10 +322,12 @@ model Product {
   batches         Batch[]
   serials         SerialNumber[]
   reorderRules    ReorderRule[]
+  productionRuns  ProductionRun[]
 
   @@unique([organizationId, sku])
   @@index([organizationId, barcode])
   @@index([organizationId, name])
+  @@index([organizationId])
 }
 
 model ProductImage {
@@ -351,12 +364,39 @@ model Warehouse {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  stocks       InventoryStock[]
-  transactions InventoryTransaction[]
-  batches      BatchStock[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stocks         InventoryStock[]
+  transactions   InventoryTransaction[]
+  batches        BatchStock[]
+  productionRuns ProductionRun[]
 
   @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model ProductionRun {
+  id               String   @id @default(cuid()) @map("_id")
+  organizationId   String
+  runNumber        String
+  productId        String
+  warehouseId      String
+  quantityProduced Float
+  laborCost        Float    @default(0)
+  overheadCost     Float    @default(0)
+  totalCost        Float    @default(0)
+  unitCost         Float    @default(0)
+  notes            String?
+  producedById     String?
+  createdAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
+  warehouse    Warehouse    @relation(fields: [warehouseId], references: [id])
+
+  @@index([organizationId])
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([createdAt])
 }
 
 model InventoryStock {
@@ -430,6 +470,9 @@ model StockAdjustment {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, warehouseId])
 }
 
 model StockTransfer {
@@ -448,6 +491,8 @@ model StockTransfer {
   lines        StockTransferLine[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, fromWarehouseId])
 }
 
 model StockTransferLine {
@@ -485,6 +530,7 @@ model Customer {
   salesReturns SalesReturn[]
 
   @@index([organizationId, name])
+  @@index([organizationId])
 }
 
 model Vendor {
@@ -513,6 +559,7 @@ model Vendor {
   purchaseReturns PurchaseReturn[]
 
   @@index([organizationId, name])
+  @@index([organizationId])
 }
 
 model Estimate {
@@ -534,6 +581,8 @@ model Estimate {
   lines        EstimateLine[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, customerId])
+  @@index([organizationId, status])
 }
 
 model EstimateLine {
@@ -607,6 +656,8 @@ model Package {
   shipment     Shipment?
 
   @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, salesOrderId])
 }
 
 model PackageLine {
@@ -637,6 +688,8 @@ model Shipment {
   lines        ShipmentLine[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, salesOrderId])
 }
 
 model ShipmentLine {
@@ -741,6 +794,8 @@ model PurchaseOrder {
   purchaseReturns PurchaseReturn[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, vendorId])
 }
 
 model PurchaseOrderLine {
@@ -769,6 +824,7 @@ model PurchaseReceive {
   lines         PurchaseReceiveLine[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, purchaseOrderId])
 }
 
 model PurchaseReceiveLine {
@@ -801,6 +857,8 @@ model Bill {
   payments      VendorPaymentAllocation[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, vendorId])
 }
 
 model BillLine {
@@ -855,6 +913,8 @@ model SalesReturn {
   lines        SalesReturnLine[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, customerId])
+  @@index([organizationId, status])
 }
 
 model SalesReturnLine {
@@ -883,6 +943,8 @@ model PurchaseReturn {
   lines         PurchaseReturnLine[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, vendorId])
 }
 
 model PurchaseReturnLine {

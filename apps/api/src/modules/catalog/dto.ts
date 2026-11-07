@@ -11,7 +11,8 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { ProductType } from "@prisma/client";
+import { ProductType, ItemClassification } from "@prisma/client";
+import { PaginationQueryDto } from "../../common/pagination";
 
 export class NameDto {
   @IsString()
@@ -62,6 +63,9 @@ export class CreateProductDto {
   @IsEnum(ProductType)
   type?: ProductType;
   @IsOptional()
+  @IsEnum(ItemClassification)
+  classification?: ItemClassification;
+  @IsOptional()
   @IsString()
   categoryId?: string;
   @IsOptional()
@@ -88,9 +92,149 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   trackInventory?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
   @IsOptional()
   @IsArray()
   components?: { childProductId: string; quantity: number }[];
+}
+
+export class UpdateProductDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  sku?: string;
+
+  @IsOptional()
+  @IsString()
+  barcode?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsEnum(ProductType)
+  type?: ProductType;
+
+  @IsOptional()
+  @IsEnum(ItemClassification)
+  classification?: ItemClassification;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  brandId?: string;
+
+  @IsOptional()
+  @IsString()
+  unitId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  sellingPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  costPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  taxRate?: number;
+
+  @IsOptional()
+  @IsNumber()
+  reorderLevel?: number;
+
+  @IsOptional()
+  @IsString()
+  preferredVendorId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  trackInventory?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  components?: { childProductId: string; quantity: number }[];
+}
+
+export class ProductQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @IsString()
+  classification?: string;
+}
+
+export class ProduceGoodsDto {
+  @IsString()
+  @IsNotEmpty()
+  productId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  warehouseId!: string;
+
+  @IsNumber()
+  @Min(0.0001)
+  quantityProduced!: number;
+
+  @IsOptional()
+  @IsNumber()
+  laborCost?: number;
+
+  @IsOptional()
+  @IsNumber()
+  overheadCost?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class DailyProductionItemDto {
+  @IsString()
+  @IsNotEmpty()
+  productId!: string;
+
+  @IsNumber()
+  @Min(0.0001)
+  quantity!: number;
+}
+
+export class DailyProductionLogDto {
+  @IsString()
+  @IsNotEmpty()
+  warehouseId!: string;
+
+  @IsOptional()
+  @IsString()
+  date?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DailyProductionItemDto)
+  outwards!: DailyProductionItemDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DailyProductionItemDto)
+  inwards!: DailyProductionItemDto[];
 }
 
 export class OpeningStockDto {
