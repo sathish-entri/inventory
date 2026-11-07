@@ -47,6 +47,7 @@ import {
   ArrowDownRight,
   Flame,
   Layers,
+  MessageCircle,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────
@@ -4563,8 +4564,38 @@ type Estimate = {
 };
 
 // ─────────────────────────────────────────────────────────
-// PRINTABLE ESTIMATE QUOTATION MODAL
+// PRINTABLE ESTIMATE QUOTATION MODAL & WHATSAPP SHARING
 // ─────────────────────────────────────────────────────────
+export const shareEstimateOnWhatsApp = (estimate: any) => {
+  if (!estimate) return;
+  const customer = estimate.customer || {};
+  const phone = (customer.phone || "").replace(/\D/g, "");
+  const total = Number(estimate.total || 0);
+  const liveAppUrl = getPublicAppUrl();
+  const trackUrl = `${liveAppUrl}/track-order/${estimate.id}`;
+  const text = [
+    `Hello ${customer.name || "Customer"},`,
+    ``,
+    `Here is your official Price Estimate Quote *${estimate.number}* from *OSCAR AUTO FLUX*.`,
+    ``,
+    `*Total Quote Amount:* ₹${total.toLocaleString("en-IN")}`,
+    `*Validity:* Valid for 30 Days`,
+    ``,
+    `🔗 *CLICK LINK TO REVIEW & CONFIRM ORDER:*`,
+    ``,
+    trackUrl,
+    ``,
+    `*(Click the link above to view your official quotation & click the "Approve & Confirm Order" button to register with factory)*`,
+    ``,
+    `📞 For any enquiry, call or WhatsApp +91 94432 51863`,
+    `Thank you!`
+  ].join("\n");
+  const url = phone
+    ? `https://wa.me/${phone.length === 10 ? "91" + phone : phone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, "_blank");
+};
+
 export function PrintEstimateModal({
   estimate,
   onClose,
@@ -4588,30 +4619,7 @@ export function PrintEstimateModal({
   };
 
   const handleWhatsAppShare = () => {
-    const phone = (customer.phone || "").replace(/\D/g, "");
-    const liveAppUrl = getPublicAppUrl();
-    const trackUrl = `${liveAppUrl}/track-order/${estimate.id}`;
-    const text = [
-      `Hello ${customer.name || "Customer"},`,
-      ``,
-      `Here is your official Price Estimate Quote *${estimate.number}* from *OSCAR AUTO FLUX*.`,
-      ``,
-      `*Total Quote Amount:* ₹${total.toLocaleString("en-IN")}`,
-      `*Validity:* Valid for 30 Days`,
-      ``,
-      `🔗 *CLICK LINK TO REVIEW & CONFIRM ORDER:*`,
-      ``,
-      trackUrl,
-      ``,
-      `*(Click the link above to view your official quotation & click the "Approve & Confirm Order" button to register with factory)*`,
-      ``,
-      `📞 For any enquiry, call or WhatsApp +91 94432 51863`,
-      `Thank you!`
-    ].join("\n");
-    const url = phone
-      ? `https://wa.me/${phone.length === 10 ? "91" + phone : phone}?text=${encodeURIComponent(text)}`
-      : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
+    shareEstimateOnWhatsApp(estimate);
   };
 
   const handleCopyTrackingLink = () => {
@@ -4859,11 +4867,15 @@ export function EstimatesPage() {
         })),
       });
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["estimates"] });
       setOpen(false);
+      setForm({ customerId: "", warehouseId: "" });
       setLines([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
       toast("Estimate quote created successfully!");
+      if (res?.data) {
+        setPrintEstimate(res.data);
+      }
     },
     onError: (err: any) => toast(err.response?.data?.message ?? err.message ?? "Could not create estimate.", "error"),
   });
@@ -4880,17 +4892,41 @@ export function EstimatesPage() {
     onError: (err: any) => toast(err.response?.data?.message ?? "Could not convert estimate.", "error"),
   });
 
+  const sortedEstimates = useMemo(() => {
+    const listData = Array.isArray(list.data) ? list.data : [];
+    return [...listData].sort((a, b) => {
+      const numA = parseInt(String(a.number || "").replace(/\D/g, "") || "0", 10);
+      const numB = parseInt(String(b.number || "").replace(/\D/g, "") || "0", 10);
+      if (numB !== numA) return numB - numA;
+      const tA = new Date(a.date || a.createdAt || 0).getTime();
+      const tB = new Date(b.date || b.createdAt || 0).getTime();
+      return tB - tA;
+    });
+  }, [list.data]);
+
   const columns: Column<Estimate>[] = [
     { label: "Estimate #", render: (r) => <strong>{r.number}</strong> },
     { label: "Customer", render: (r) => r.customer?.name ?? "—" },
     { label: "Status", render: (r) => <Badge status={r.status ?? "draft"} /> },
-    { label: "Date / Expiry", render: (r) => r.createdAt ? new Date(r.createdAt).toLocaleDateString() : (r.expiryDate ? new Date(r.expiryDate).toLocaleDateString() : "—") },
+    { label: "Date / Expiry", render: (r) => (r.date || r.createdAt) ? new Date(r.date || r.createdAt).toLocaleDateString() : (r.expiryDate ? new Date(r.expiryDate).toLocaleDateString() : "—") },
     { label: "Total Quote", align: "right", render: (r) => <strong>{money(Number(r.total))}</strong> },
     {
       label: "Actions",
       align: "right",
       render: (r) => (
-        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: "#16a34a", color: "#fff", border: "none", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              shareEstimateOnWhatsApp(r);
+            }}
+            title={`Direct WhatsApp Share for ${r.number}`}
+          >
+            <MessageCircle size={13} /> WhatsApp
+          </button>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -4938,7 +4974,7 @@ export function EstimatesPage() {
       <div className="card">
         <DataTable
           columns={columns}
-          data={list.data ?? []}
+          data={sortedEstimates}
           loading={list.isLoading}
           error={list.error}
           searchFields={["number"]}
@@ -4950,11 +4986,17 @@ export function EstimatesPage() {
       {/* Create Estimate Modal */}
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setForm({ customerId: "", warehouseId: "" });
+        }}
         title="Create New Price Estimate (Quotation)"
         footer={
           <>
-            <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn-secondary" onClick={() => {
+              setOpen(false);
+              setForm({ customerId: "", warehouseId: "" });
+            }}>Cancel</button>
             <button className="btn btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
               {create.isPending && <span className="spinner" style={{ width: 14, height: 14 }} />} Create Estimate Quote
             </button>

@@ -121,7 +121,13 @@ export function TrackOrderPage() {
 
   const { order, estimate, factory, isConfirmed } = data;
   const currentStep = order?.trackingStep ?? (isConfirmed ? 1 : 0);
-  const displayTotal = Number(estimate?.total || order?.total || 0);
+  const displayLines = (order?.lines && order.lines.length > 0) ? order.lines : (estimate?.lines ?? []);
+  const displayCustomer = order?.customer || estimate?.customer || {};
+  const displayTotal = Number(order?.total ?? estimate?.total ?? 0);
+  const displaySubtotal = Number(order?.subtotal ?? estimate?.subtotal ?? displayTotal);
+  const displayTax = Number(order?.tax ?? estimate?.tax ?? 0);
+  const displayRefNumber = isConfirmed ? (order?.number || estimate?.number || "SO") : (estimate?.number || "EST");
+  const displayDate = order?.date || order?.createdAt || estimate?.date || estimate?.createdAt;
 
   const steps = [
     {
@@ -167,7 +173,8 @@ export function TrackOrderPage() {
   };
 
   const handleWhatsAppEnquiry = () => {
-    const text = `Hello OSCAR AUTO FLUX Factory Support,\n\nI am inquiring regarding ${isConfirmed ? `Order *#${order?.number}*` : `Quotation *#${estimate?.number}*`}.\nCustomer: ${order?.customer?.name}\nTotal: ₹${Number(order?.total || 0).toLocaleString("en-IN")}\n\nPlease share the status.\nThank you!`;
+    const custName = displayCustomer?.name || "Customer";
+    const text = `Hello OSCAR AUTO FLUX Factory Support,\n\nI am inquiring regarding ${isConfirmed ? `Order *#${order?.number || displayRefNumber}*` : `Quotation *#${estimate?.number || displayRefNumber}*`}.\nCustomer: ${custName}\nTotal: ₹${displayTotal.toLocaleString("en-IN")}\n\nPlease share the status.\nThank you!`;
     window.open(`https://wa.me/919443251863?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -556,15 +563,15 @@ export function TrackOrderPage() {
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
                 <MapPin size={13} color="#2563eb" /> Customer & Delivery Details
               </div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>{order?.customer?.name}</div>
-              {order?.customer?.phone && (
-                <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>Phone: <strong>{order.customer.phone}</strong></div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>{displayCustomer?.name || "Customer"}</div>
+              {displayCustomer?.phone && (
+                <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>Phone: <strong>{displayCustomer.phone}</strong></div>
               )}
-              {order?.customer?.email && (
-                <div style={{ fontSize: 12, color: "#475569" }}>Email: {order.customer.email}</div>
+              {displayCustomer?.email && (
+                <div style={{ fontSize: 12, color: "#475569" }}>Email: {displayCustomer.email}</div>
               )}
               <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>
-                {order?.customer?.address ? `${order.customer.address}, ` : ""}{order?.customer?.city || "Tamil Nadu"}, {order?.customer?.state || "India"}
+                {displayCustomer?.address ? `${displayCustomer.address}, ` : ""}{displayCustomer?.city || "Tamil Nadu"}, {displayCustomer?.state || "India"}
               </div>
             </div>
 
@@ -580,11 +587,11 @@ export function TrackOrderPage() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
                 <span style={{ color: "#64748b" }}>Order / Ref #:</span>
-                <strong>{order?.number || estimate?.number}</strong>
+                <strong>{displayRefNumber}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
                 <span style={{ color: "#64748b" }}>Date:</span>
-                <span>{order?.date ? new Date(order.date).toLocaleDateString("en-IN") : "—"}</span>
+                <span>{displayDate ? new Date(displayDate).toLocaleDateString("en-IN") : "—"}</span>
               </div>
             </div>
           </div>
@@ -609,7 +616,7 @@ export function TrackOrderPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(order?.lines ?? []).map((l: any, i: number) => (
+                  {displayLines.map((l: any, i: number) => (
                     <tr key={l.id || i} style={{ borderBottom: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "10px 12px", color: "#94a3b8" }}>{i + 1}</td>
                       <td style={{ padding: "10px 12px" }}>
@@ -636,7 +643,7 @@ export function TrackOrderPage() {
 
             {/* Mobile Cards (shown only on mobile) */}
             <div className="track-mobile-cards">
-              {(order?.lines ?? []).map((l: any, i: number) => (
+              {displayLines.map((l: any, i: number) => (
                 <div key={l.id || i} className="track-mobile-item-card">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>{l.name}</div>
@@ -659,15 +666,15 @@ export function TrackOrderPage() {
               <div style={{ width: "100%", maxWidth: 280, background: "#f8fafc", padding: "12px 14px", borderRadius: 10, border: "1px solid #e2e8f0" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, color: "#64748b" }}>
                   <span>Subtotal:</span>
-                  <span>₹{Number(order?.subtotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  <span>₹{displaySubtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6, color: "#64748b" }}>
                   <span>GST Tax Total:</span>
-                  <span>₹{Number(order?.tax || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  <span>₹{displayTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 800, color: "#15803d", borderTop: "1px solid #e2e8f0", paddingTop: 6 }}>
                   <span>Grand Total:</span>
-                  <span>₹{Number(order?.total || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  <span>₹{displayTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
