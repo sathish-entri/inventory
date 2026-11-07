@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Area, AreaChart, CartesianGrid, Bar, BarChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell, Legend,
+  Line, LineChart, ComposedChart,
 } from "recharts";
 import api from "./api";
 import { useAuth } from "./auth";
@@ -40,6 +41,12 @@ import {
   Calendar,
   Minus,
   LayoutGrid,
+  Target,
+  Activity,
+  ArrowUpRight,
+  ArrowDownRight,
+  Flame,
+  Layers,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────
@@ -7952,6 +7959,7 @@ export function ManufacturingPage() {
   // ── Monthly Analytics State ──
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [analyticsGraphMode, setAnalyticsGraphMode] = useState<"growth" | "variance" | "daily">("growth");
 
   const monthlyAnalytics = useQuery({
     queryKey: ["monthlyAnalytics", selectedYear, selectedMonth, selectedWarehouseId],
@@ -8574,258 +8582,689 @@ export function ManufacturingPage() {
             </button>
           </div>
 
-          {/* KPI Summary Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-            <div className="card" style={{ padding: 18, borderLeft: "4px solid #10b981", position: "relative" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
-                  Total Outward Finished Goods Produced
-                </span>
-                <InfoTooltip text="Intha month factory-la motham produce aana finished goods count (Flex bundles, coils, items)." />
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "#059669", marginTop: 4 }}>
-                {monthlyAnalytics.data?.summary?.totalOutwardQuantity ?? 0}
-              </div>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
-                Ready welding materials built this month
-              </span>
-            </div>
+          {/* KPI Summary Cards with MoM Growth & Data Science Metrics */}
+          {(() => {
+            const summaryData = monthlyAnalytics.data?.summary ?? {
+              totalOutwardQuantity: monthlyAnalytics.data?.totalOutwardUnits ?? 0,
+              totalInwardQuantity: monthlyAnalytics.data?.totalInwardUnits ?? 0,
+              activeDays: monthlyAnalytics.data?.activeProductionDays ?? 0,
+              totalTransactions: monthlyAnalytics.data?.totalTransactions ?? 0,
+              totalInwardCost: monthlyAnalytics.data?.totalInwardCost ?? 0,
+            };
 
-            <div className="card" style={{ padding: 18, borderLeft: "4px solid #6366f1", position: "relative" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
-                  Total Inward Raw Materials Consumed
-                </span>
-                <InfoTooltip text="Intha month finished goods produce seiyya consume aana Wire rod, Chemical flux & Shielding gas motha alavu." />
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "#4f46e5", marginTop: 4 }}>
-                {monthlyAnalytics.data?.summary?.totalInwardQuantity ?? 0}
-              </div>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
-                Wire rod, flux & gas used this month
-              </span>
-            </div>
+            const growth = monthlyAnalytics.data?.growth ?? {
+              prevOutwardUnits: 0,
+              prevInwardUnits: 0,
+              outwardGrowthPercent: 0,
+              inwardGrowthPercent: 0,
+            };
 
-            <div className="card" style={{ padding: 18, borderLeft: "4px solid #f59e0b", position: "relative" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
-                  Active Production Days
-                </span>
-                <InfoTooltip text="Intha month-la factory ethana naatkal run aagi daily production log save pannirukom nu kaattum." />
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "#d97706", marginTop: 4 }}>
-                {monthlyAnalytics.data?.summary?.activeDays ?? 0}
-              </div>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
-                Days with logged manufacturing runs
-              </span>
-            </div>
+            const kpis = monthlyAnalytics.data?.kpis ?? {
+              materialYieldRate: 100,
+              overallEfficiencyPercent: 100,
+              totalWastageCostLoss: 0,
+              totalWastageQty: 0,
+              avgPacksPerDay: 0,
+              unitMaterialCostPerPack: 0,
+              wastageLossRatioPercent: 0,
+              hasRecipeConfigured: false,
+            };
 
-            <div className="card" style={{ padding: 18, borderLeft: "4px solid #0284c7", position: "relative" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block" }}>
-                  Total Notebook Transactions
-                </span>
-                <InfoTooltip text="Intha month notebook ledger-la record aana motha stock movements entries count." />
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: "#0284c7", marginTop: 4 }}>
-                {monthlyAnalytics.data?.summary?.totalTransactions ?? 0}
-              </div>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "block" }}>
-                Ledger movements recorded
-              </span>
-            </div>
-          </div>
+            const varianceList = monthlyAnalytics.data?.varianceBreakdown ?? [];
 
-          {/* Daily Trend Chart: Inward vs Outward */}
-          <div className="card" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <BarChart3 size={18} color="var(--accent)" />
-                Daily Factory Trend: Outward Produced vs Inward Consumed
-              </h4>
-              <InfoTooltip text="Month-la ovvoru naalum yevlo finished goods ready aachu (Green Bar) vs yevlo raw materials use aachu (Purple Bar) nu daily comparison bar graph." align="right" />
-            </div>
+            let cumulativePacks = 0;
+            const enrichedTrend = (monthlyAnalytics.data?.dailyTrend ?? []).map((d: any) => {
+              cumulativePacks += Number(d.outwards || 0);
+              return {
+                ...d,
+                cumulativeOutwards: cumulativePacks,
+              };
+            });
 
-            {monthlyAnalytics.isLoading ? (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
-                Loading monthly trend chart…
-              </div>
-            ) : (monthlyAnalytics.data?.dailyTrend ?? []).length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontStyle: "italic" }}>
-                No production transactions recorded in this month. Use "Daily Production Notebook" tab to enter logs!
-              </div>
-            ) : (
-              <div style={{ width: "100%", height: 320 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyAnalytics.data.dailyTrend} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{ background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
-                      formatter={(val: any, name: any) => [
-                        `${val} units`,
-                        name === "outwards" ? "📤 Finished Goods Outward" : "📥 Raw Materials Inward",
-                      ]}
-                    />
-                    <Legend
-                      formatter={(value) =>
-                        value === "outwards" ? "📤 Finished Goods (Outward)" : "📥 Raw Materials Consumed (Inward)"
-                      }
-                    />
-                    <Bar dataKey="outwards" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="inwards" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-
-          {/* Side-by-Side Breakdown Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
-            {/* Outward Breakdown */}
-            <div className="card" style={{ padding: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "#065f46" }}>
-                  📤 Finished Goods Output Breakdown (This Month)
-                </h4>
-                <InfoTooltip text="Intha month entha entha finished product yevlo count produce aachu nu item-wise breakdown." align="right" />
-              </div>
-              {(monthlyAnalytics.data?.outwardBreakdown ?? []).length === 0 ? (
-                <div style={{ color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: 10 }}>
-                  No finished goods recorded.
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {monthlyAnalytics.data.outwardBreakdown.map((b: any, idx: number) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "8px 12px",
-                        background: "#f0fdf4",
-                        borderRadius: 6,
-                        border: "1px solid #dcfce7",
-                      }}
-                    >
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: "#065f46" }}>{b.name}</span>
-                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{b.sku}</span>
-                      </div>
-                      <strong style={{ fontSize: 15, color: "#059669" }}>
-                        {b.quantity} {b.unit}
-                      </strong>
+            return (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+                  {/* Card 1: Outward Finished Goods */}
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #10b981", position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block", fontWeight: 600 }}>
+                        Total Finished Output (25kg Packs)
+                      </span>
+                      <InfoTooltip text="Intha month factory-la motham produce aana finished goods count (Flex bundles & 25kg packs). Mela irukura green/red pill pona maasatha vida production yevlo % grow aagirukku nu kaatum." />
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Inward Breakdown */}
-            <div className="card" style={{ padding: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "#3730a3" }}>
-                  📥 Raw Materials Consumed Breakdown (This Month)
-                </h4>
-                <InfoTooltip text="Intha month entha entha raw material / gas yevlo consumption aachu nu item-wise breakdown." align="right" />
-              </div>
-              {(monthlyAnalytics.data?.inwardBreakdown ?? []).length === 0 ? (
-                <div style={{ color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: 10 }}>
-                  No inward materials recorded.
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {monthlyAnalytics.data.inwardBreakdown.map((b: any, idx: number) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "8px 12px",
-                        background: "#eef2ff",
-                        borderRadius: 6,
-                        border: "1px solid #e0e7ff",
-                      }}
-                    >
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: "#3730a3" }}>{b.name}</span>
-                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{b.sku}</span>
-                      </div>
-                      <strong style={{ fontSize: 15, color: "#4f46e5" }}>
-                        {b.quantity} {b.unit}
-                      </strong>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: "#059669" }}>
+                        {(summaryData.totalOutwardQuantity ?? 0).toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>Packs</span>
+                      {growth.outwardGrowthPercent !== undefined && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: "2px 7px",
+                            borderRadius: 12,
+                            background: growth.outwardGrowthPercent >= 0 ? "#dcfce7" : "#fee2e2",
+                            color: growth.outwardGrowthPercent >= 0 ? "#15803d" : "#b91c1c",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 2,
+                          }}
+                        >
+                          {growth.outwardGrowthPercent >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                          {growth.outwardGrowthPercent > 0 ? `+${growth.outwardGrowthPercent}%` : `${growth.outwardGrowthPercent}%`} MoM
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "block" }}>
+                      Total Net Mass: {((summaryData.totalOutwardQuantity ?? 0) * 25).toLocaleString()} kg
+                    </span>
+                  </div>
 
-          {/* Digital Notebook Ledger Table */}
-          <div className="card" style={{ padding: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <ClipboardList size={18} color="var(--accent)" />
-                Daily Digital Notebook Ledger (Month Logbook Entries)
-              </h4>
-              <InfoTooltip text="Paper note-la date pottu eludhina mathiri ovvoru transaction-um date, product, quantity & notes-oda irukkum digital ledger. Mela irukura print button click panni PDF-ah download pannalam." align="right" />
-            </div>
-            <div style={{ overflowX: "auto" }}>
-              <table className="data-table" style={{ width: "100%", fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th>Date & Time</th>
-                    <th>Type</th>
-                    <th>Product / Material</th>
-                    <th style={{ textAlign: "right" }}>Quantity</th>
-                    <th>Warehouse</th>
-                    <th>Reference / Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(monthlyAnalytics.data?.recentLedger ?? []).length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
-                        No ledger transactions found for this month.
-                      </td>
-                    </tr>
+                  {/* Card 2: Inward Raw Material Consumed */}
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #6366f1", position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block", fontWeight: 600 }}>
+                        Total Raw Materials Consumed
+                      </span>
+                      <InfoTooltip text="Intha month finished goods produce seiyya consume aana Wire rod, Chemical flux & Shielding gas motha alavu mattrum motha spend (₹)." />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: "#4f46e5" }}>
+                        {(summaryData.totalInwardQuantity ?? 0).toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#4f46e5" }}>kg / Units</span>
+                      {growth.inwardGrowthPercent !== undefined && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: "2px 7px",
+                            borderRadius: 12,
+                            background: "#ede9fe",
+                            color: "#6d28d9",
+                          }}
+                        >
+                          {growth.inwardGrowthPercent > 0 ? `+${growth.inwardGrowthPercent}%` : `${growth.inwardGrowthPercent}%`} MoM
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "block" }}>
+                      Total Material Spend: ₹{(summaryData.totalInwardCost ?? 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Card 3: Material Efficiency Rate */}
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #0284c7", position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block", fontWeight: 600 }}>
+                        🎯 Material Efficiency Rate
+                      </span>
+                      <InfoTooltip text="Formula/Recipe padi thevaiyana alavu vs actual-ah consume aana alavu ratio. 95% mela irundha excellent production. Koranja raw material waste aagudhu nu artham." />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: kpis.overallEfficiencyPercent >= 94 ? "#0284c7" : "#d97706" }}>
+                        {kpis.overallEfficiencyPercent}%
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: 12,
+                          background: kpis.overallEfficiencyPercent >= 94 ? "#e0f2fe" : "#fef3c7",
+                          color: kpis.overallEfficiencyPercent >= 94 ? "#0369a1" : "#b45309",
+                        }}
+                      >
+                        {kpis.overallEfficiencyPercent >= 94 ? "🟢 Optimal" : "🟡 Moderate Wastage"}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "block" }}>
+                      Target Benchmark: &gt;95.0% Industrial Efficiency
+                    </span>
+                  </div>
+
+                  {/* Card 4: Material Wastage Financial Loss */}
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #ef4444", position: "relative", background: kpis.totalWastageCostLoss > 0 ? "#fff5f5" : "#fff" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, color: "#b91c1c", display: "block", fontWeight: 700 }}>
+                        💸 Material Wastage Financial Loss
+                      </span>
+                      <InfoTooltip text="Formula-vai vida extra-va use panna raw material-oda direct panam loss! Spillage, leakage, extra coating moolama factory-ku aana extra expense." />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: "#dc2626" }}>
+                        ₹{kpis.totalWastageCostLoss.toLocaleString()}
+                      </span>
+                      {kpis.totalWastageCostLoss > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 12, background: "#fee2e2", color: "#991b1b" }}>
+                          ⚠️ LOSS
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 11, color: "#b91c1c", marginTop: 4, display: "block" }}>
+                      {kpis.totalWastageQty > 0 ? `${kpis.totalWastageQty.toLocaleString()} kg extra consumed (${kpis.wastageLossRatioPercent}% of spend)` : "Zero material waste recorded!"}
+                    </span>
+                  </div>
+
+                  {/* Card 5: Overall Material Yield */}
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #8b5cf6", position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block", fontWeight: 600 }}>
+                        ⚡ Material Yield Rate (OEE Yield)
+                      </span>
+                      <InfoTooltip text="100 kg raw material machine-la pottal ethana kg finished good-ah maarudhu nu kaatum standard industrial yield metric (Finished Mass ÷ Input Mass)." />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: "#7c3aed" }}>
+                        {kpis.materialYieldRate}%
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12, background: "#f3e8ff", color: "#6b21a8" }}>
+                        Yield
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "block" }}>
+                      Benchmark: 92% – 96% Standard Flex Yield
+                    </span>
+                  </div>
+
+                  {/* Card 6: Daily Run Rate & Cost Per Pack */}
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #f59e0b", position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)", display: "block", fontWeight: 600 }}>
+                        🏭 Daily Run Rate & Unit Cost
+                      </span>
+                      <InfoTooltip text="Oru active factory working day-ku average-ah evlo packs ready aagudhu and 1 pack-oda raw material production cost evlo nu kaatum." />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
+                      <span style={{ fontSize: 26, fontWeight: 800, color: "#d97706" }}>
+                        {kpis.avgPacksPerDay}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#d97706" }}>Packs/Day</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "block" }}>
+                      Avg Material Cost: ₹{kpis.unitMaterialCostPerPack.toLocaleString()} / 25kg Pack
+                    </span>
+                  </div>
+                </div>
+
+                {/* 🎯 SECTION 2: MATERIAL EFFICIENCY & WASTAGE LOSS TRACKER */}
+                <div className="card" style={{ padding: 22, border: "1px solid #fed7aa", background: "#fffdfa" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+                    <div>
+                      <h4 style={{ fontSize: 17, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8, color: "#9a3412" }}>
+                        <Target size={20} color="#ea580c" />
+                        🎯 Raw Material Efficiency & Wastage Loss Tracker (Formula BOM vs Actual Consumed)
+                      </h4>
+                      <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#78350f" }}>
+                        Formula-padi ovvoru 25kg pack-kum thevaiyana standard alavu vs Daily Notebook-la actual-ah use panna alavu comparison. Extra use aana raw material wastage-ai yum financial loss-ai yum spot pannalaam.
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span
+                        style={{
+                          background: kpis.totalWastageCostLoss > 0 ? "#fee2e2" : "#dcfce7",
+                          color: kpis.totalWastageCostLoss > 0 ? "#991b1b" : "#166534",
+                          padding: "6px 14px",
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {kpis.totalWastageCostLoss > 0 ? (
+                          <>⚠️ Total Wastage Financial Loss: ₹{kpis.totalWastageCostLoss.toLocaleString()}</>
+                        ) : (
+                          <>✓ Zero Material Wastage: Highly Efficient</>
+                        )}
+                      </span>
+                      <InfoTooltip text="Intha table-la ovvoru raw material-um standard formula padi evlo thevai, actual-ah evlo use aachu, extra-va use aana material moolama evlo panam loss aachu nu kaattum." align="right" />
+                    </div>
+                  </div>
+
+                  {varianceList.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: 30, color: "var(--text-muted)", fontStyle: "italic" }}>
+                      No raw material consumption logs recorded for this month yet. Enter daily production entries in "Daily Production Notebook" tab to see real-time wastage analysis!
+                    </div>
                   ) : (
-                    monthlyAnalytics.data.recentLedger.map((row: any) => (
-                      <tr key={row.id}>
-                        <td>{new Date(row.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td>
-                        <td>
-                          {row.type === "PRODUCTION_OUTPUT" ? (
-                            <span style={{ background: "#dcfce7", color: "#166534", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
-                              📤 OUTWARD (+)
-                            </span>
-                          ) : (
-                            <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
-                              📥 INWARD (-)
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <span style={{ fontWeight: 600 }}>{row.productName}</span>
-                          <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{row.sku}</span>
-                        </td>
-                        <td style={{ textAlign: "right", fontWeight: 700, color: row.type === "PRODUCTION_OUTPUT" ? "#16a34a" : "#dc2626" }}>
-                          {row.type === "PRODUCTION_OUTPUT" ? `+${row.quantity}` : `-${row.quantity}`} {row.unit}
-                        </td>
-                        <td>{row.warehouseName}</td>
-                        <td style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                          {row.referenceNumber || row.notes || "—"}
-                        </td>
-                      </tr>
-                    ))
+                    <div style={{ overflowX: "auto" }}>
+                      <table className="data-table" style={{ width: "100%", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "#fef3c7", color: "#78350f" }}>
+                            <th>Raw Material / Consumable</th>
+                            <th style={{ textAlign: "right" }}>Standard Expected (Formula)</th>
+                            <th style={{ textAlign: "right" }}>Actual Consumed (Notebook)</th>
+                            <th style={{ textAlign: "right" }}>Variance (Diff)</th>
+                            <th style={{ textAlign: "right" }}>Unit Cost</th>
+                            <th style={{ textAlign: "right" }}>Wastage Loss (₹)</th>
+                            <th style={{ textAlign: "center" }}>Efficiency Score</th>
+                            <th style={{ textAlign: "center" }}>Industrial Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {varianceList.map((v: any, idx: number) => {
+                            const isOver = v.varianceQty > 0;
+                            return (
+                              <tr key={idx} style={{ background: isOver && v.wastageLossCost > 500 ? "#fff5f5" : "#ffffff" }}>
+                                <td>
+                                  <strong style={{ display: "block", color: "var(--text-primary)" }}>{v.name}</strong>
+                                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{v.sku}</span>
+                                </td>
+                                <td style={{ textAlign: "right", color: "#2563eb", fontWeight: 600 }}>
+                                  {v.expectedQty.toLocaleString()} {v.unit}
+                                </td>
+                                <td style={{ textAlign: "right", color: "#4f46e5", fontWeight: 700 }}>
+                                  {v.actualQty.toLocaleString()} {v.unit}
+                                </td>
+                                <td style={{ textAlign: "right" }}>
+                                  <span
+                                    style={{
+                                      padding: "2px 8px",
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      background: isOver ? "#fee2e2" : "#dcfce7",
+                                      color: isOver ? "#991b1b" : "#15803d",
+                                    }}
+                                  >
+                                    {isOver ? `+${v.varianceQty.toLocaleString()}` : `${v.varianceQty.toLocaleString()}`} {v.unit}
+                                    {isOver ? " (Overused)" : " (Saved)"}
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: "right", color: "var(--text-muted)" }}>
+                                  ₹{v.unitCostPrice} / {v.unit}
+                                </td>
+                                <td style={{ textAlign: "right" }}>
+                                  {v.wastageLossCost > 0 ? (
+                                    <strong style={{ color: "#dc2626", fontSize: 14 }}>
+                                      ₹{v.wastageLossCost.toLocaleString()}
+                                    </strong>
+                                  ) : (
+                                    <span style={{ color: "#16a34a", fontWeight: 600 }}>₹0 (No Loss)</span>
+                                  )}
+                                </td>
+                                <td style={{ textAlign: "center" }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                    <div style={{ width: 60, height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
+                                      <div
+                                        style={{
+                                          width: `${Math.min(100, v.efficiencyPercent)}%`,
+                                          height: "100%",
+                                          background: v.efficiencyPercent >= 95 ? "#10b981" : v.efficiencyPercent >= 90 ? "#f59e0b" : "#ef4444",
+                                        }}
+                                      />
+                                    </div>
+                                    <span style={{ fontSize: 12, fontWeight: 700 }}>{v.efficiencyPercent}%</span>
+                                  </div>
+                                </td>
+                                <td style={{ textAlign: "center" }}>
+                                  {v.status === "HIGH_WASTAGE" ? (
+                                    <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                      🔴 High Wastage Alert
+                                    </span>
+                                  ) : v.status === "SLIGHT_WASTAGE" ? (
+                                    <span style={{ background: "#fef3c7", color: "#b45309", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                      🟡 Slight Wastage
+                                    </span>
+                                  ) : (
+                                    <span style={{ background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                      🟢 Optimal Control
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+
+                {/* 📈 SECTION 3: INDUSTRIAL GROWTH & TREND ANALYTICS GRAPHS */}
+                <div className="card" style={{ padding: 22 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+                    <div>
+                      <h4 style={{ fontSize: 16, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <Activity size={18} color="var(--accent)" />
+                        Industrial Growth Graphs & Multi-Series Production Analytics
+                      </h4>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        Factory output trajectory, cumulative volume growth & raw material consumption patterns
+                      </span>
+                    </div>
+
+                    {/* Chart Mode Toggle */}
+                    <div style={{ display: "flex", gap: 6, background: "#f1f5f9", padding: 4, borderRadius: 8 }}>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${analyticsGraphMode === "growth" ? "btn-primary" : "btn-ghost"}`}
+                        onClick={() => setAnalyticsGraphMode("growth")}
+                        style={{ fontSize: 12 }}
+                      >
+                        🚀 Production Volume & Growth Trajectory
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${analyticsGraphMode === "variance" ? "btn-primary" : "btn-ghost"}`}
+                        onClick={() => setAnalyticsGraphMode("variance")}
+                        style={{ fontSize: 12 }}
+                      >
+                        ⚖️ Formula Expected vs Actual Consumed
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${analyticsGraphMode === "daily" ? "btn-primary" : "btn-ghost"}`}
+                        onClick={() => setAnalyticsGraphMode("daily")}
+                        style={{ fontSize: 12 }}
+                      >
+                        📊 Daily Output vs Inward Trend
+                      </button>
+                    </div>
+                  </div>
+
+                  {monthlyAnalytics.isLoading ? (
+                    <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+                      Loading industrial analytics chart…
+                    </div>
+                  ) : enrichedTrend.length === 0 ? (
+                    <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontStyle: "italic" }}>
+                      No production transactions recorded in this month. Use "Daily Production Notebook" tab to enter logs!
+                    </div>
+                  ) : (
+                    <div style={{ width: "100%", height: 340 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        {analyticsGraphMode === "growth" ? (
+                          /* Graph 1: Growth Trajectory & Daily Output */
+                          <ComposedChart data={enrichedTrend} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="dayLabel" tick={{ fontSize: 11 }} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                              formatter={(val: any, name: any) => [
+                                `${val} units`,
+                                name === "outwards"
+                                  ? "📤 Daily Ready Packs (25kg)"
+                                  : name === "cumulativeOutwards"
+                                  ? "🚀 Cumulative Monthly Output"
+                                  : "📥 Raw Materials Consumed",
+                              ]}
+                            />
+                            <Legend
+                              formatter={(value) =>
+                                value === "outwards"
+                                  ? "📤 Daily Ready Packs (25kg)"
+                                  : value === "cumulativeOutwards"
+                                  ? "🚀 Cumulative Output Trajectory"
+                                  : "📥 Raw Materials Consumed"
+                              }
+                            />
+                            <Bar yAxisId="left" dataKey="outwards" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                            <Line
+                              yAxisId="right"
+                              type="monotone"
+                              dataKey="cumulativeOutwards"
+                              stroke="#0284c7"
+                              strokeWidth={3}
+                              dot={{ r: 4, fill: "#0284c7" }}
+                              activeDot={{ r: 6 }}
+                            />
+                          </ComposedChart>
+                        ) : analyticsGraphMode === "variance" ? (
+                          /* Graph 2: Formula Expected vs Actual Consumed */
+                          <BarChart data={varianceList} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                              formatter={(val: any, name: any) => [
+                                `${val} units`,
+                                name === "expectedQty" ? "🔵 Standard Expected (Formula)" : "🟣 Actual Consumed (Daily Notebook)",
+                              ]}
+                            />
+                            <Legend
+                              formatter={(value) =>
+                                value === "expectedQty"
+                                  ? "🔵 Standard Expected (Formula)"
+                                  : "🟣 Actual Consumed (Daily Notebook)"
+                              }
+                            />
+                            <Bar dataKey="expectedQty" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={38} />
+                            <Bar dataKey="actualQty" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={38} />
+                          </BarChart>
+                        ) : (
+                          /* Graph 3: Daily Outward vs Inward */
+                          <BarChart data={enrichedTrend} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="dayLabel" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                              formatter={(val: any, name: any) => [
+                                `${val} units`,
+                                name === "outwards" ? "📤 Finished Goods Outward" : "📥 Raw Materials Inward",
+                              ]}
+                            />
+                            <Legend
+                              formatter={(value) =>
+                                value === "outwards" ? "📤 Finished Goods (Outward)" : "📥 Raw Materials Consumed (Inward)"
+                              }
+                            />
+                            <Bar dataKey="outwards" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                            <Bar dataKey="inwards" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                          </BarChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+
+                {/* 🧠 SECTION 4: INDUSTRIAL DATA SCIENCE & BUSINESS IMPROVEMENT INSIGHTS */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #10b981", background: "#f0fdf4" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <TrendingUp size={18} color="#15803d" />
+                      <strong style={{ fontSize: 14, color: "#166534" }}>Production Momentum & Growth</strong>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: "#166534", lineHeight: 1.5 }}>
+                      Factory produced <strong>{summaryData.totalOutwardQuantity} packs</strong> across <strong>{summaryData.activeDays} working days</strong> (Avg <strong>{kpis.avgPacksPerDay} packs/day</strong>).
+                      {growth.outwardGrowthPercent > 0 ? (
+                        <> Pona maasathai vida <strong>+{growth.outwardGrowthPercent}% production growth</strong> achieve aagiyiruku!</>
+                      ) : (
+                        <> Maintain steady daily shifts to improve overall monthly volume.</>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #f59e0b", background: "#fefce8" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <Target size={18} color="#b45309" />
+                      <strong style={{ fontSize: 14, color: "#854d0e" }}>Wastage Leakage Optimization</strong>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: "#854d0e", lineHeight: 1.5 }}>
+                      {kpis.totalWastageCostLoss > 0 ? (
+                        <>
+                          This month raw material wastage leakage-la <strong>₹{kpis.totalWastageCostLoss.toLocaleString()}</strong> loss aayirukku. Top waste aana raw material-la spillage koraicha immediate-ah factory profit increase aagum!
+                        </>
+                      ) : (
+                        <>Excellent material control! Formula-padi raw material accurate-ah use aagi zero leakage maintain aagudhu.</>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #0284c7", background: "#f0f9ff" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <Activity size={18} color="#0369a1" />
+                      <strong style={{ fontSize: 14, color: "#075985" }}>Material Yield & Quality Control</strong>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: "#075985", lineHeight: 1.5 }}>
+                      Current Process Yield: <strong>{kpis.materialYieldRate}%</strong> (Finished mass vs input mass). Standard 92%–96% range-la irundha raw material conversion highly stable.
+                    </p>
+                  </div>
+
+                  <div className="card" style={{ padding: 18, borderLeft: "4px solid #8b5cf6", background: "#faf5ff" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <Calculator size={18} color="#6b21a8" />
+                      <strong style={{ fontSize: 14, color: "#581c87" }}>Unit Manufacturing Cost</strong>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: "#581c87", lineHeight: 1.5 }}>
+                      Average Raw Material Cost: <strong>₹{kpis.unitMaterialCostPerPack.toLocaleString()} / 25kg Pack</strong>. Bulk purchase and zero spillage moolama unit cost-ai ₹20–₹50 koraikka mudiyum.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Side-by-Side Breakdown Cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
+                  {/* Outward Breakdown */}
+                  <div className="card" style={{ padding: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "#065f46" }}>
+                        📤 Finished Goods Output Breakdown (This Month)
+                      </h4>
+                      <InfoTooltip text="Intha month entha entha finished product yevlo count produce aachu nu item-wise breakdown." align="right" />
+                    </div>
+                    {(monthlyAnalytics.data?.outwardBreakdown ?? []).length === 0 ? (
+                      <div style={{ color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: 10 }}>
+                        No finished goods recorded.
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {monthlyAnalytics.data.outwardBreakdown.map((b: any, idx: number) => (
+                          <div
+                            key={idx}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 12px",
+                              background: "#f0fdf4",
+                              borderRadius: 6,
+                              border: "1px solid #dcfce7",
+                            }}
+                          >
+                            <div>
+                              <span style={{ fontWeight: 600, fontSize: 13, color: "#065f46" }}>{b.name}</span>
+                              <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{b.sku}</span>
+                            </div>
+                            <strong style={{ fontSize: 15, color: "#059669" }}>
+                              {b.quantity} {b.unit}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Inward Breakdown */}
+                  <div className="card" style={{ padding: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "#3730a3" }}>
+                        📥 Raw Materials Consumed Breakdown (This Month)
+                      </h4>
+                      <InfoTooltip text="Intha month entha entha raw material / gas yevlo consumption aachu nu item-wise breakdown." align="right" />
+                    </div>
+                    {(monthlyAnalytics.data?.inwardBreakdown ?? []).length === 0 ? (
+                      <div style={{ color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: 10 }}>
+                        No inward materials recorded.
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {monthlyAnalytics.data.inwardBreakdown.map((b: any, idx: number) => (
+                          <div
+                            key={idx}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 12px",
+                              background: "#eef2ff",
+                              borderRadius: 6,
+                              border: "1px solid #e0e7ff",
+                            }}
+                          >
+                            <div>
+                              <span style={{ fontWeight: 600, fontSize: 13, color: "#3730a3" }}>{b.name}</span>
+                              <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{b.sku}</span>
+                            </div>
+                            <strong style={{ fontSize: 15, color: "#4f46e5" }}>
+                              {b.quantity} {b.unit}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Digital Notebook Ledger Table */}
+                <div className="card" style={{ padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      <ClipboardList size={18} color="var(--accent)" />
+                      Daily Digital Notebook Ledger (Month Logbook Entries)
+                    </h4>
+                    <InfoTooltip text="Paper note-la date pottu eludhina mathiri ovvoru transaction-um date, product, quantity & notes-oda irukkum digital ledger. Mela irukura print button click panni PDF-ah download pannalam." align="right" />
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="data-table" style={{ width: "100%", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc" }}>
+                          <th>Date & Time</th>
+                          <th>Type</th>
+                          <th>Product / Material</th>
+                          <th style={{ textAlign: "right" }}>Quantity</th>
+                          <th>Warehouse</th>
+                          <th>Reference / Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(monthlyAnalytics.data?.recentLedger ?? monthlyAnalytics.data?.recentTxns ?? []).length === 0 ? (
+                          <tr>
+                            <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
+                              No ledger transactions found for this month.
+                            </td>
+                          </tr>
+                        ) : (
+                          (monthlyAnalytics.data?.recentLedger ?? monthlyAnalytics.data?.recentTxns ?? []).map((row: any) => (
+                            <tr key={row.id}>
+                              <td>{new Date(row.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                              <td>
+                                {row.type === "PRODUCTION_OUTPUT" ? (
+                                  <span style={{ background: "#dcfce7", color: "#166534", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                    📤 OUTWARD (+)
+                                  </span>
+                                ) : (
+                                  <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                    📥 INWARD (-)
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <span style={{ fontWeight: 600 }}>{row.productName}</span>
+                                <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{row.sku}</span>
+                              </td>
+                              <td style={{ textAlign: "right", fontWeight: 700, color: row.type === "PRODUCTION_OUTPUT" ? "#16a34a" : "#dc2626" }}>
+                                {row.type === "PRODUCTION_OUTPUT" ? `+${row.quantity}` : `-${row.quantity}`} {row.unit}
+                              </td>
+                              <td>{row.warehouseName}</td>
+                              <td style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                                {row.referenceNumber || row.notes || "—"}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 

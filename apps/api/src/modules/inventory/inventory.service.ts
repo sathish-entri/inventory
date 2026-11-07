@@ -976,26 +976,236 @@ export class InventoryService {
     const outwardBreakdown = Array.from(outwardMap.values()).sort((a, b) => b.totalQty - a.totalQty);
     const inwardBreakdown = Array.from(inwardMap.values()).sort((a, b) => b.totalQty - a.totalQty);
 
+    // ── Previous Month Query for MoM Growth Analytics ──
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevStart = new Date(prevYear, prevMonth - 1, 1, 0, 0, 0, 0);
+    const prevEnd = new Date(prevYear, prevMonth, 1, 0, 0, 0, 0);
+
+    const prevTxns = await this.prisma.inventoryTransaction.findMany({
+      where: {
+        organizationId,
+        ...(warehouseId ? { warehouseId } : {}),
+        type: { in: ["PRODUCTION_OUTPUT", "PRODUCTION_CONSUMPTION"] as any },
+        createdAt: { gte: prevStart, lt: prevEnd },
+      },
+      select: { type: true, quantity: true },
+    });
+
+    let prevOutwardUnits = 0;
+    let prevInwardUnits = 0;
+    for (const pt of prevTxns) {
+      if (pt.type === "PRODUCTION_OUTPUT") prevOutwardUnits += pt.quantity;
+      else if (pt.type === "PRODUCTION_CONSUMPTION") prevInwardUnits += pt.quantity;
+    }
+
+    const outwardGrowthPercent = prevOutwardUnits > 0
+      ? Number((((totalOutwardUnits - prevOutwardUnits) / prevOutwardUnits) * 100).toFixed(1))
+      : (totalOutwardUnits > 0 ? 100 : 0);
+
+    const inwardGrowthPercent = prevInwardUnits > 0
+      ? Number((((totalInwardUnits - prevInwardUnits) / prevInwardUnits) * 100).toFixed(1))
+      : (totalInwardUnits > 0 ? 100 : 0);
+
+    // ── Fetch Recipes / BOM for Expected vs Actual Wastage Calculation ──
+    const finishedProductIds = Array.from(outwardMap.keys());
+    const productsWithBOM = await this.prisma.product.findMany({
+      where: { id: { in: finishedProductIds }, organizationId },
+      include: {
+        components: {
+          include: {
+            child: {
+              select: { id: true, name: true, sku: true, costPrice: true, description: true, classification: true },
+            },
+          },
+        },
+      },
+    });
+
+    const expectedComponents = new Map<string, {
+      id: string;
+      name: string;
+      sku: string;
+      unit: string;
+      expectedQty: number;
+      costPrice: number;
+    }>();
+
+    let hasAnyRecipe = false;
+    for (const p of productsWithBOM) {
+      const producedCount = outwardMap.get(p.id)?.totalQty || 0;
+      if (p.components && p.components.length > 0) {
+        hasAnyRecipe = true;
+        for (const comp of p.components) {
+          const child = comp.child;
+          const unitMatch = child.description?.match(/Unit:\s*([a-zA-Z0-9]+)/);
+          const unit = unitMatch ? unitMatch[1] : (child.classification === "CONSUMABLE" ? "cylinder" : "kg");
+          const cur = expectedComponents.get(child.id) || {
+            id: child.id,
+            name: child.name,
+            sku: child.sku,
+            unit,
+            expectedQty: 0,
+            costPrice: Number(child.costPrice) || 0,
+          };
+          cur.expectedQty += comp.quantity * producedCount;
+          expectedComponents.set(child.id, cur);
+        }
+      }
+    }
+
+    // ── Material Efficiency & Wastage Loss Math ──
+    let totalExpectedQty = 0;
+    let totalWastageCostLoss = 0;
+    let totalActualInwardCost = 0;
+    let totalWastageQty = 0;
+
+    const varianceBreakdown = inwardBreakdown.map((inwardItem) => {
+      totalActualInwardCost += inwardItem.estimatedCost;
+      const exp = expectedComponents.get(inwardItem.id);
+
+      let expectedQty = 0;
+      if (exp) {
+        expectedQty = exp.expectedQty;
+      } else if (!hasAnyRecipe && totalOutwardUnits > 0) {
+        // Fallback: standard 25kg/pack baseline distributed across raw materials
+        const totalInwardWeight = totalInwardUnits || 1;
+        const shareRatio = inwardItem.totalQty / totalInwardWeight;
+        expectedQty = totalOutwardUnits * 25 * shareRatio;
+      } else {
+        expectedQty = inwardItem.totalQty;
+      }
+
+      totalExpectedQty += expectedQty;
+      const varianceQty = inwardItem.totalQty - expectedQty; // Positive = extra material consumed / waste
+      const unitCost = inwardItem.totalQty > 0 ? inwardItem.estimatedCost / inwardItem.totalQty : 0;
+      const wastageLossCost = Math.max(0, varianceQty) * unitCost;
+
+      if (varianceQty > 0) {
+        totalWastageCostLoss += wastageLossCost;
+        totalWastageQty += varianceQty;
+      }
+
+      const efficiencyPercent = inwardItem.totalQty > 0
+        ? Math.min(125, Math.max(0, Number(((expectedQty / inwardItem.totalQty) * 100).toFixed(1))))
+        : 100;
+
+      return {
+        productId: inwardItem.id,
+        name: inwardItem.name,
+        sku: inwardItem.sku,
+        unit: inwardItem.unit,
+        actualQty: Number(inwardItem.totalQty.toFixed(2)),
+        expectedQty: Number(expectedQty.toFixed(2)),
+        varianceQty: Number(varianceQty.toFixed(2)),
+        isWastage: varianceQty > 0.05,
+        unitCostPrice: Number(unitCost.toFixed(2)),
+        wastageLossCost: Number(wastageLossCost.toFixed(2)),
+        actualCost: Number(inwardItem.estimatedCost.toFixed(2)),
+        efficiencyPercent,
+        status: varianceQty > (expectedQty * 0.08) ? "HIGH_WASTAGE" : varianceQty > 0 ? "SLIGHT_WASTAGE" : "OPTIMAL",
+      };
+    });
+
+    varianceBreakdown.sort((a, b) => b.wastageLossCost - a.wastageLossCost);
+
+    // ── Industrial KPIs ──
+    const totalOutwardNetWeight = totalOutwardUnits * 25; // Standard 25kg finished bags
+    const materialYieldRate = totalInwardUnits > 0
+      ? Number(((totalOutwardNetWeight / totalInwardUnits) * 100).toFixed(1))
+      : 100;
+
+    const overallEfficiencyPercent = totalInwardUnits > 0 && totalExpectedQty > 0
+      ? Number(((totalExpectedQty / totalInwardUnits) * 100).toFixed(1))
+      : 100;
+
+    const avgPacksPerDay = activeDates.size > 0
+      ? Number((totalOutwardUnits / activeDates.size).toFixed(1))
+      : 0;
+
+    const unitMaterialCostPerPack = totalOutwardUnits > 0
+      ? Number((totalActualInwardCost / totalOutwardUnits).toFixed(2))
+      : 0;
+
+    const wastageLossRatioPercent = totalActualInwardCost > 0
+      ? Number(((totalWastageCostLoss / totalActualInwardCost) * 100).toFixed(1))
+      : 0;
+
     return {
       year,
       month,
       totalOutwardUnits,
       totalInwardUnits,
+      totalInwardCost: Number(totalActualInwardCost.toFixed(2)),
       activeProductionDays: activeDates.size,
       totalTransactions: txns.length,
-      outwardBreakdown,
-      inwardBreakdown,
+      summary: {
+        totalOutwardQuantity: totalOutwardUnits,
+        totalInwardQuantity: totalInwardUnits,
+        activeDays: activeDates.size,
+        totalTransactions: txns.length,
+        totalInwardCost: Number(totalActualInwardCost.toFixed(2)),
+      },
+      growth: {
+        prevOutwardUnits,
+        prevInwardUnits,
+        outwardGrowthPercent,
+        inwardGrowthPercent,
+      },
+      kpis: {
+        materialYieldRate,
+        overallEfficiencyPercent,
+        totalWastageCostLoss: Number(totalWastageCostLoss.toFixed(2)),
+        totalWastageQty: Number(totalWastageQty.toFixed(2)),
+        avgPacksPerDay,
+        unitMaterialCostPerPack,
+        wastageLossRatioPercent,
+        hasRecipeConfigured: hasAnyRecipe,
+      },
+      varianceBreakdown,
+      outwardBreakdown: outwardBreakdown.map((b) => ({ ...b, quantity: b.totalQty })),
+      inwardBreakdown: inwardBreakdown.map((b) => ({ ...b, quantity: b.totalQty })),
       dailyTrend,
-      recentTxns: txns.slice(0, 60).map((t) => ({
-        id: t.id,
-        date: t.createdAt,
-        type: t.type,
-        productId: t.productId,
-        productName: t.product?.name ?? "Item",
-        quantity: t.quantity,
-        referenceId: t.referenceId,
-        reason: t.reason,
-      })),
+      recentTxns: txns.slice(0, 60).map((t) => {
+        const p = t.product;
+        const unitMatch = p?.description?.match(/Unit:\s*([a-zA-Z0-9]+)/);
+        const unit = unitMatch ? unitMatch[1] : (p?.classification === "CONSUMABLE" ? "cylinder" : p?.classification === "FINISHED_GOOD" ? "box" : "kg");
+        return {
+          id: t.id,
+          date: t.createdAt,
+          type: t.type,
+          productId: t.productId,
+          productName: p?.name ?? "Item",
+          sku: p?.sku ?? "SKU",
+          quantity: t.quantity,
+          unit,
+          warehouseName: t.warehouse?.name ?? "Factory Warehouse",
+          referenceId: t.referenceId,
+          referenceNumber: t.referenceId,
+          reason: t.reason,
+          notes: t.reason,
+        };
+      }),
+      recentLedger: txns.slice(0, 60).map((t) => {
+        const p = t.product;
+        const unitMatch = p?.description?.match(/Unit:\s*([a-zA-Z0-9]+)/);
+        const unit = unitMatch ? unitMatch[1] : (p?.classification === "CONSUMABLE" ? "cylinder" : p?.classification === "FINISHED_GOOD" ? "box" : "kg");
+        return {
+          id: t.id,
+          date: t.createdAt,
+          type: t.type,
+          productId: t.productId,
+          productName: p?.name ?? "Item",
+          sku: p?.sku ?? "SKU",
+          quantity: t.quantity,
+          unit,
+          warehouseName: t.warehouse?.name ?? "Factory Warehouse",
+          referenceId: t.referenceId,
+          referenceNumber: t.referenceId,
+          reason: t.reason,
+          notes: t.reason,
+        };
+      }),
     };
   }
 }
