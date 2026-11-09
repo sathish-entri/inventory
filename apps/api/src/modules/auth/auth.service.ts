@@ -47,6 +47,17 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, rounds);
     const normalizedEmail = dto.email.toLowerCase().trim();
 
+    // Enforce globally unique email address
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+      select: { id: true, email: true },
+    });
+    if (existingUser) {
+      throw new BadRequestException(
+        "An account with this email address already exists. Please log in or use 'Forgot Password'.",
+      );
+    }
+
     const baseSlug = slugify(dto.organizationName);
     const existingOrg = await this.prisma.organization.findUnique({
       where: { slug: baseSlug },

@@ -80,10 +80,10 @@ export class AdminController {
 
     const normalizedEmail = dto.email.toLowerCase().trim();
     const existing = await this.prisma.user.findFirst({
-      where: { organizationId: user.organizationId, email: normalizedEmail },
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
     });
     if (existing) {
-      throw new ConflictException(`A user with email "${normalizedEmail}" already exists in your organization.`);
+      throw new ConflictException(`A user with email "${normalizedEmail}" already exists.`);
     }
 
     const rounds = Number(process.env.BCRYPT_ROUNDS || 10);
