@@ -232,7 +232,7 @@ export class InventoryService {
       for (const item of lines) {
         const row = await this.lockStock(tx, organizationId, item.productId, warehouseId);
         const cur = this.snapshot(row);
-        const next = applyShipment(cur, item.quantity);
+        const next = applyShipment(cur, item.quantity, org.allowNegativeStock);
         await tx.inventoryStock.update({
           where: { id: row.id },
           data: { quantity: next.quantity, reservedQuantity: next.reservedQuantity },

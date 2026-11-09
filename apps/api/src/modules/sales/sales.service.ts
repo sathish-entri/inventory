@@ -714,6 +714,39 @@ export class SalesService {
       throw new BadRequestException("Order is already fully packed! No remaining items to pack.");
     }
 
+    // Validate warehouse physical stock for each item being packed
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { allowNegativeStock: true },
+    });
+    if (!org?.allowNegativeStock) {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { id: order.warehouseId },
+        select: { name: true },
+      });
+      for (const line of linesToCreate) {
+        const stockRow = await this.prisma.inventoryStock.findUnique({
+          where: {
+            organizationId_productId_warehouseId: {
+              organizationId: orgId,
+              productId: line.productId,
+              warehouseId: order.warehouseId,
+            },
+          },
+        });
+        const currentQty = stockRow?.quantity ?? 0;
+        if (currentQty < line.quantity) {
+          const product = await this.prisma.product.findUnique({
+            where: { id: line.productId },
+            select: { name: true, sku: true },
+          });
+          throw new BadRequestException(
+            `Cannot pack order: Finished good '${product?.name || "Product"}' has insufficient stock in warehouse '${warehouse?.name || "Main"}'. Available stock is ${currentQty}, but required is ${line.quantity}. Please record production in Manufacturing first.`
+          );
+        }
+      }
+    }
+
     return this.prisma.$transaction(async (tx: any) => {
       const number = await this.sequences.nextInTx(tx, orgId, "PKG", "PKG");
       return tx.package.create({
@@ -766,12 +799,25 @@ export class SalesService {
       reference: pkg.number,
     });
 
+    const shipmentNumber = await this.sequences.nextInTx(this.prisma, orgId, "SHP", "SHP");
+
+    // 1. Deduct inventory first - will throw if stock is insufficient
+    await this.inventory.shipReserved(
+      orgId,
+      pkg.salesOrder.warehouseId,
+      pkg.lines.map((l: any) => ({ productId: l.productId, quantity: Number(l.quantity) })),
+      "shipment",
+      shipmentNumber,
+      userId,
+      `ship:${pkg.id}`,
+    );
+
+    // 2. Create shipment record and mark package SHIPPED
     const shipment = await this.prisma.$transaction(async (tx: any) => {
-      const number = await this.sequences.nextInTx(tx, orgId, "SHP", "SHP");
-      const row = await tx .shipment.create({
+      const row = await tx.shipment.create({
         data: {
           organizationId: orgId,
-          number,
+          number: shipmentNumber,
           salesOrderId: pkg.salesOrderId,
           packageId: pkg.id,
           status: "CONFIRMED",
@@ -788,16 +834,6 @@ export class SalesService {
       await tx.package.update({ where: { id: pkg.id }, data: { status: "SHIPPED" } });
       return row;
     });
-
-    await this.inventory.shipReserved(
-      orgId,
-      pkg.salesOrder.warehouseId,
-      pkg.lines.map((l: any) => ({ productId: l.productId, quantity: Number(l.quantity) })),
-      "shipment",
-      shipment.id,
-      userId,
-      `ship:${shipment.id}`,
-    );
 
     for (const line of pkg.lines) {
       const soLine = pkg.salesOrder.lines.find((l: any) => l.productId === line.productId);

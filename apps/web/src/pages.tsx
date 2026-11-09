@@ -6292,8 +6292,23 @@ export function FulfillmentPage({ kind }: { kind: "packages" | "shipments" }) {
   const list = useList<FulfillRow>(kind, `/${kind}`);
   const packages = useList<FulfillRow>("packages", "/packages");
   const orders = useList<SalesOrder>("so", "/sales-orders");
+  const inventory = useList<any>("inv", "/inventory");
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  const checkOrderStock = (order: SalesOrder) => {
+    const invList = inventory.data ?? [];
+    const lines = order.lines ?? [];
+    if (!lines.length) return { hasStock: true, statusText: "Stock Check OK" };
+    for (const line of lines) {
+      const invItem = invList.find((i: any) => (i.productId === line.productId || i.product?.id === line.productId));
+      const qty = invItem ? Number(invItem.quantity ?? 0) : 0;
+      if (qty < Number(line.quantity)) {
+        return { hasStock: false, statusText: `Low Stock (${qty} available, need ${line.quantity})` };
+      }
+    }
+    return { hasStock: true, statusText: "Ready in Warehouse" };
+  };
 
   const packOrder = useMutation({
     mutationFn: async (order: SalesOrder) => {
@@ -6373,29 +6388,46 @@ export function FulfillmentPage({ kind }: { kind: "packages" | "shipments" }) {
                       <th>Order #</th>
                       <th>Customer</th>
                       <th style={{ textAlign: "right" }}>Total</th>
+                      <th>Warehouse Stock</th>
                       <th>Status</th>
                       <th style={{ textAlign: "right" }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {confirmedOrders.map((o) => (
-                      <tr key={o.id}>
-                        <td><strong>{o.number}</strong></td>
-                        <td>{o.customer?.name ?? "—"}</td>
-                        <td style={{ textAlign: "right" }}><strong>{money(Number(o.total))}</strong></td>
-                        <td><Badge status={o.status} /></td>
-                        <td style={{ textAlign: "right" }}>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            disabled={packOrder.isPending}
-                            onClick={() => packOrder.mutate(o)}
-                          >
-                            {packOrder.isPending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <Box size={13} />}
-                            Pack Order
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {confirmedOrders.map((o) => {
+                      const stockInfo = checkOrderStock(o);
+                      return (
+                        <tr key={o.id}>
+                          <td><strong>{o.number}</strong></td>
+                          <td>{o.customer?.name ?? "—"}</td>
+                          <td style={{ textAlign: "right" }}><strong>{money(Number(o.total))}</strong></td>
+                          <td>
+                            {stockInfo.hasStock ? (
+                              <span style={{ background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
+                                ✓ Ready in Warehouse
+                              </span>
+                            ) : (
+                              <span style={{ background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700 }} title="Produce in Manufacturing before packing">
+                                ⚠️ {stockInfo.statusText}
+                              </span>
+                            )}
+                          </td>
+                          <td><Badge status={o.status} /></td>
+                          <td style={{ textAlign: "right" }}>
+                            <button
+                              className="btn btn-primary btn-sm"
+                              disabled={packOrder.isPending || !stockInfo.hasStock}
+                              onClick={() => packOrder.mutate(o)}
+                              title={!stockInfo.hasStock ? "Warehouse-la finished goods stock illai. Manufacturing tab-la production entry pottu finished goods create pannunga." : "Pack order"}
+                              style={{ opacity: !stockInfo.hasStock ? 0.6 : 1 }}
+                            >
+                              {packOrder.isPending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <Box size={13} />}
+                              Pack Order
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
