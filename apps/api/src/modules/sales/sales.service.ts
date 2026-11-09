@@ -123,11 +123,11 @@ export class SalesService {
     });
 
     if (estimate) {
-      // Find if a SalesOrder was already created for this estimate
+      // Find if a SalesOrder was already created for this estimate (search by unique estimate ID)
       order = await this.prisma.salesOrder.findFirst({
         where: {
           organizationId: estimate.organizationId,
-          notes: { contains: `[EST:${estimate.id}]` },
+          notes: { contains: estimate.id },
         },
         include: {
           lines: true,
@@ -328,7 +328,7 @@ export class SalesService {
     const existingOrder = await this.prisma.salesOrder.findFirst({
       where: {
         organizationId: estimate.organizationId,
-        notes: { contains: `[EST:${estimate.id}]` },
+        notes: { contains: estimate.id },
       },
     });
 
@@ -376,7 +376,7 @@ export class SalesService {
         tax: estimate.tax,
         discount: estimate.discount,
         total: estimate.total,
-        notes: `Customer approved quotation via public link [EST:${estimate.id}] on ${new Date().toISOString()}`,
+        notes: `Customer approved quotation via public link EST_REF:${estimate.id} from ${estimate.number} on ${new Date().toISOString()}`,
         lines: {
           create: (estimate.lines ?? []).map((l: any) => ({
             productId: l.productId,
@@ -417,7 +417,7 @@ export class SalesService {
     const existingOrder = await this.prisma.salesOrder.findFirst({
       where: {
         organizationId: orgId,
-        notes: { contains: `[EST:${estimate.id}]` },
+        notes: { contains: estimate.id },
       },
       include: { lines: true, customer: true },
     });
@@ -459,7 +459,7 @@ export class SalesService {
         tax: estimate.tax,
         discount: estimate.discount,
         total: estimate.total,
-        notes: `Converted from Estimate Quote ${estimate.number} [EST:${estimate.id}]`,
+        notes: `Converted from Estimate Quote ${estimate.number} EST_REF:${estimate.id}`,
         lines: {
           create: (estimate.lines ?? []).map((l: any) => ({
             productId: l.productId,
