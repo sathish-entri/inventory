@@ -337,4 +337,213 @@ export class PurchasesService {
       orderBy: { createdAt: "desc" },
     });
   }
+
+  async getVendorPurchaseHistory(orgId: string, vendorId: string) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { id: vendorId, organizationId: orgId },
+    });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+
+    // 1. Fetch Purchase Orders with line items
+    const purchaseOrders = await this.prisma.purchaseOrder.findMany({
+      where: { vendorId, organizationId: orgId },
+      include: {
+        lines: true,
+        receives: { select: { id: true, number: true, receivedAt: true } },
+        bills: { select: { id: true, number: true, status: true, total: true, amountPaid: true } },
+      },
+      orderBy: { date: "desc" },
+    });
+
+    // 2. Fetch Bills with line items and payments
+    const bills = await this.prisma.bill.findMany({
+      where: { vendorId, organizationId: orgId },
+      include: {
+        lines: true,
+        payments: {
+          include: {
+            vendorPayment: { select: { id: true, amount: true, method: true, paidAt: true } },
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+    });
+
+    // 3. Fetch Direct Vendor Payments
+    const payments = await this.prisma.vendorPayment.findMany({
+      where: { vendorId, organizationId: orgId },
+      include: {
+        allocations: {
+          include: {
+            bill: { select: { id: true, number: true } },
+          },
+        },
+      },
+      orderBy: { paidAt: "desc" },
+    });
+
+    // 4. Resolve Product metadata across all lines
+    const pIds = new Set<string>();
+    purchaseOrders.forEach((po) => po.lines.forEach((l) => l.productId && pIds.add(l.productId)));
+    bills.forEach((b) => b.lines.forEach((l) => l.productId && pIds.add(l.productId)));
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: Array.from(pIds) }, organizationId: orgId },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        classification: true,
+        description: true,
+        unit: { select: { name: true } },
+      },
+    });
+    const pMap = new Map(products.map((p) => [p.id, p]));
+
+    // Format Purchase Orders with product details
+    const formattedPOs = purchaseOrders.map((po) => ({
+      id: po.id,
+      number: po.number,
+      date: po.date,
+      expectedDate: po.expectedDate,
+      status: po.status,
+      subtotal: po.subtotal,
+      tax: po.tax,
+      total: po.total,
+      notes: po.notes,
+      lines: po.lines.map((l) => {
+        const prod = pMap.get(l.productId);
+        const unitMatch = prod?.description?.match(/Unit:\s*([a-zA-Z0-9]+)/);
+        const unitName = prod?.unit?.name || (unitMatch ? unitMatch[1] : (prod?.classification === "CONSUMABLE" ? "cylinder" : prod?.classification === "FINISHED_GOOD" ? "box" : "kg"));
+        return {
+          id: l.id,
+          productId: l.productId,
+          productName: prod?.name ?? "Raw Material / Consumable",
+          sku: prod?.sku ?? "SKU",
+          classification: prod?.classification ?? "RAW_MATERIAL",
+          unit: unitName,
+          quantity: l.quantity,
+          receivedQty: l.receivedQty,
+          unitCost: l.unitCost,
+          taxRate: l.taxRate,
+          amount: l.amount,
+        };
+      }),
+      receivesCount: po.receives.length,
+      bills: po.bills,
+    }));
+
+    // Format Bills with details
+    const formattedBills = bills.map((b) => ({
+      id: b.id,
+      number: b.number,
+      date: b.date,
+      dueDate: b.dueDate,
+      status: b.status,
+      total: b.total,
+      amountPaid: b.amountPaid,
+      balance: Math.max(0, b.total - b.amountPaid),
+      lines: b.lines.map((l) => {
+        const prod = l.productId ? pMap.get(l.productId) : null;
+        return {
+          id: l.id,
+          description: l.description,
+          productName: prod?.name ?? l.description,
+          sku: prod?.sku ?? "—",
+          quantity: l.quantity,
+          unitCost: l.unitCost,
+          amount: l.amount,
+        };
+      }),
+      payments: b.payments.map((p) => ({
+        paymentId: p.vendorPayment?.id,
+        amount: p.amount,
+        method: p.vendorPayment?.method,
+        paidAt: p.vendorPayment?.paidAt,
+      })),
+    }));
+
+    // 5. Aggregate Product / Raw Material purchase analytics
+    const productStatsMap = new Map<string, {
+      productId: string;
+      productName: string;
+      sku: string;
+      classification: string;
+      unit: string;
+      totalQty: number;
+      totalSpend: number;
+      ordersCount: number;
+      lastDate: Date;
+    }>();
+
+    for (const po of formattedPOs) {
+      for (const line of po.lines) {
+        const existing = productStatsMap.get(line.productId) ?? {
+          productId: line.productId,
+          productName: line.productName,
+          sku: line.sku,
+          classification: line.classification,
+          unit: line.unit,
+          totalQty: 0,
+          totalSpend: 0,
+          ordersCount: 0,
+          lastDate: po.date,
+        };
+        existing.totalQty += line.quantity;
+        existing.totalSpend += line.amount;
+        existing.ordersCount += 1;
+        if (new Date(po.date) > new Date(existing.lastDate)) {
+          existing.lastDate = po.date;
+        }
+        productStatsMap.set(line.productId, existing);
+      }
+    }
+
+    const itemBreakdown = Array.from(productStatsMap.values()).map((item) => ({
+      ...item,
+      avgUnitCost: item.totalQty > 0 ? Math.round((item.totalSpend / item.totalQty) * 100) / 100 : 0,
+    }));
+
+    // 6. Summary metrics
+    const totalPurchasedAmount = purchaseOrders.reduce((sum, po) => sum + (po.total || 0), 0);
+    const totalBilledAmount = bills.reduce((sum, b) => sum + (b.total || 0), 0);
+    const directPaymentsSum = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const billPaidSum = bills.reduce((sum, b) => sum + (b.amountPaid || 0), 0);
+    const totalPaidAmount = Math.max(directPaymentsSum, billPaidSum);
+    const effectiveTotal = totalBilledAmount > 0 ? totalBilledAmount : totalPurchasedAmount;
+    const outstandingBalance = Math.max(0, effectiveTotal - totalPaidAmount);
+
+    const allDates = [
+      ...purchaseOrders.map((p) => new Date(p.date)),
+      ...bills.map((b) => new Date(b.date)),
+    ].sort((a, b) => a.getTime() - b.getTime());
+
+    return {
+      vendor,
+      summary: {
+        totalOrdersCount: purchaseOrders.length,
+        totalBillsCount: bills.length,
+        totalPurchasedAmount,
+        totalBilledAmount,
+        totalPaidAmount,
+        outstandingBalance,
+        firstPurchaseDate: allDates.length > 0 ? allDates[0] : null,
+        lastPurchaseDate: allDates.length > 0 ? allDates[allDates.length - 1] : null,
+        averageOrderValue: purchaseOrders.length > 0 ? Math.round(totalPurchasedAmount / purchaseOrders.length) : 0,
+      },
+      itemBreakdown,
+      purchaseOrders: formattedPOs,
+      bills: formattedBills,
+      payments: payments.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        method: p.method,
+        paidAt: p.paidAt,
+        allocations: p.allocations.map((a) => ({
+          billNumber: a.bill?.number,
+          amount: a.amount,
+        })),
+      })),
+    };
+  }
 }

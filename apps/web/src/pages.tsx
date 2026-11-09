@@ -357,7 +357,7 @@ function PageHeader({ title, subtitle, children }: { title: string; subtitle?: s
   );
 }
 
-type ModalProps = { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean };
+type ModalProps = { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean | number | string };
 function Modal({ open, onClose, title, children, footer, wide }: ModalProps) {
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -366,9 +366,10 @@ function Modal({ open, onClose, title, children, footer, wide }: ModalProps) {
   }, [open, onClose]);
 
   if (!open) return null;
+  const maxW = typeof wide === "number" ? `${wide}px` : typeof wide === "string" ? wide : wide ? "760px" : "560px";
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: wide ? 760 : 560 }}>
+      <div className="modal" style={{ maxWidth: maxW, width: "100%" }}>
         <div className="modal-header">
           <span className="modal-title">{title}</span>
           <button onClick={onClose} className="btn btn-ghost btn-icon" style={{ marginLeft: "auto" }}>
@@ -4370,6 +4371,563 @@ function PartyFormBody({ values, onChange, sameBilling, setSameBilling, kind }: 
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// VENDOR PURCHASE HISTORY & STATEMENT MODAL
+// ─────────────────────────────────────────────────────────
+export function VendorStatementModal({
+  vendor,
+  onClose,
+}: {
+  vendor: Party | null;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"items" | "orders" | "bills" | "payments">("items");
+  const [q, setQ] = useState("");
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["vendor-history", vendor?.id],
+    queryFn: async () => {
+      if (!vendor?.id) return null;
+      const res = await api.get(`/vendors/${vendor.id}/purchase-history`);
+      return res.data;
+    },
+    enabled: !!vendor?.id,
+  });
+
+  if (!vendor) return null;
+
+  const summary = data?.summary || {};
+  const v = data?.vendor || vendor;
+  const itemBreakdown = (data?.itemBreakdown || []) as Array<{
+    productId: string;
+    productName: string;
+    sku: string;
+    classification: string;
+    unit: string;
+    totalQty: number;
+    avgUnitCost: number;
+    totalSpend: number;
+    ordersCount: number;
+    lastDate: string;
+  }>;
+  const purchaseOrders = (data?.purchaseOrders || []) as any[];
+  const bills = (data?.bills || []) as any[];
+  const payments = (data?.payments || []) as any[];
+
+  const filteredItems = itemBreakdown.filter((it) =>
+    !q ||
+    it.productName?.toLowerCase().includes(q.toLowerCase()) ||
+    it.sku?.toLowerCase().includes(q.toLowerCase())
+  );
+
+  const filteredOrders = purchaseOrders.filter((po) =>
+    !q ||
+    po.number?.toLowerCase().includes(q.toLowerCase()) ||
+    po.lines?.some((l: any) => l.productName?.toLowerCase().includes(q.toLowerCase()))
+  );
+
+  const filteredBills = bills.filter((b) =>
+    !q ||
+    b.number?.toLowerCase().includes(q.toLowerCase()) ||
+    b.lines?.some((l: any) => l.productName?.toLowerCase().includes(q.toLowerCase()) || l.description?.toLowerCase().includes(q.toLowerCase()))
+  );
+
+  const filteredPayments = payments.filter((p) =>
+    !q ||
+    p.method?.toLowerCase().includes(q.toLowerCase()) ||
+    p.allocations?.some((a: any) => a.billNumber?.toLowerCase().includes(q.toLowerCase()))
+  );
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <Modal
+      open={!!vendor}
+      onClose={onClose}
+      wide={1000}
+      title={`Vendor Purchase Statement & History — ${v.name}`}
+      footer={
+        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Showing purchase ledger records for <strong>{v.name}</strong>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-secondary" onClick={handlePrint} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Printer size={14} /> Print Statement / PDF
+            </button>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Vendor Header Profile Banner */}
+        <div style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: 14,
+          padding: "16px 20px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 16,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 20,
+              fontWeight: 800,
+              flexShrink: 0,
+            }}>
+              {v.name ? v.name.slice(0, 1).toUpperCase() : "V"}
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>{v.name}</h3>
+                <span style={{ fontSize: 11, background: "#dcfce7", color: "#15803d", padding: "2px 8px", borderRadius: 12, fontWeight: 700 }}>
+                  Active Factory Vendor
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--text-muted)", marginTop: 4, flexWrap: "wrap" }}>
+                {v.phone && <span>📞 <strong>{v.phone}</strong></span>}
+                {v.email && <span>✉️ {v.email}</span>}
+                {v.gstin && <span>🏛️ GSTIN: <strong>{v.gstin}</strong></span>}
+                {(v.city || v.state) && <span>📍 {v.city ? `${v.city}, ` : ""}{v.state || "Tamil Nadu"}</span>}
+              </div>
+              {(v.billingAddress || v.address) && (
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                  🏢 {v.billingAddress || v.address}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => refetch()}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}
+            >
+              <RefreshCw size={12} /> Refresh
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handlePrint}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, background: "#f8fafc" }}
+            >
+              <Printer size={12} /> Print
+            </button>
+          </div>
+        </div>
+
+        {/* Thanglish Explanation Help Banner */}
+        <div style={{
+          background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
+          border: "1px solid #bfdbfe",
+          borderRadius: 12,
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+        }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+            <HelpCircle size={16} />
+          </div>
+          <div style={{ fontSize: 12, color: "#1e3a8a", lineHeight: 1.5 }}>
+            <strong>💡 Vendor Purchase History & Statement:</strong> Intha vendor kitta namma factory-kku enna raw materials (Wire Rod, Argon Gas, Flux, Consumables) yepo vanginom, ethana quantity vanginom, unit price ena, motha purchase bills & pending payments ena nu <strong>A to Z full statement</strong> inge live-aa katti irukom.
+          </div>
+        </div>
+
+        {/* 4 Financial & Order Summary KPI Cards */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+          gap: 12,
+        }}>
+          {/* Total Purchased Amount */}
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            padding: "14px 16px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <ShoppingCart size={13} color="#2563eb" /> Total Purchases
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>
+              {isLoading ? "…" : money(summary.totalPurchasedAmount || 0)}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+              {summary.totalOrdersCount || 0} Purchase Orders issued
+            </div>
+          </div>
+
+          {/* Total Billed Amount */}
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            padding: "14px 16px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Receipt size={13} color="#7c3aed" /> Total Invoiced / Billed
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>
+              {isLoading ? "…" : money(summary.totalBilledAmount || 0)}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+              {summary.totalBillsCount || 0} Vendor bills received
+            </div>
+          </div>
+
+          {/* Total Paid Amount */}
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            padding: "14px 16px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <CreditCard size={13} color="#16a34a" /> Total Amount Paid
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#16a34a" }}>
+              {isLoading ? "…" : money(summary.totalPaidAmount || 0)}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+              Paid via Bank / Cash / UPI
+            </div>
+          </div>
+
+          {/* Outstanding Balance */}
+          <div style={{
+            background: Number(summary.outstandingBalance || 0) > 0 ? "#fffbeb" : "#f0fdf4",
+            border: `1px solid ${Number(summary.outstandingBalance || 0) > 0 ? "#fcd34d" : "#bbf7d0"}`,
+            borderRadius: 12,
+            padding: "14px 16px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: Number(summary.outstandingBalance || 0) > 0 ? "#92400e" : "#166534", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Clock size={13} color={Number(summary.outstandingBalance || 0) > 0 ? "#d97706" : "#16a34a"} /> Pending Balance
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: Number(summary.outstandingBalance || 0) > 0 ? "#b45309" : "#15803d" }}>
+              {isLoading ? "…" : money(summary.outstandingBalance || 0)}
+            </div>
+            <div style={{ fontSize: 11, color: Number(summary.outstandingBalance || 0) > 0 ? "#b45309" : "#166534", marginTop: 4, fontWeight: 600 }}>
+              {Number(summary.outstandingBalance || 0) > 0 ? "⚠️ Amount to be paid to vendor" : "✓ All bills fully settled!"}
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Date Range Strip */}
+        <div style={{
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: 10,
+          padding: "10px 14px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+          fontSize: 12,
+        }}>
+          <div>
+            <span style={{ color: "var(--text-muted)" }}>First Purchase: </span>
+            <strong>{summary.firstPurchaseDate ? new Date(summary.firstPurchaseDate).toLocaleDateString("en-IN") : "—"}</strong>
+          </div>
+          <div>
+            <span style={{ color: "var(--text-muted)" }}>Latest Purchase: </span>
+            <strong>{summary.lastPurchaseDate ? new Date(summary.lastPurchaseDate).toLocaleDateString("en-IN") : "—"}</strong>
+          </div>
+          <div>
+            <span style={{ color: "var(--text-muted)" }}>Average Order Value: </span>
+            <strong>{money(summary.averageOrderValue || 0)}</strong>
+          </div>
+        </div>
+
+        {/* Navigation Tabs Bar & Search */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, borderBottom: "1px solid #e2e8f0", paddingBottom: 8 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeTab === "items" ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setActiveTab("items")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+            >
+              <Package size={14} /> 📦 Materials Breakdown ({itemBreakdown.length})
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeTab === "orders" ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setActiveTab("orders")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+            >
+              <ClipboardList size={14} /> 📋 Purchase Orders ({purchaseOrders.length})
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeTab === "bills" ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setActiveTab("bills")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+            >
+              <Receipt size={14} /> 🧾 Vendor Bills ({bills.length})
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${activeTab === "payments" ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setActiveTab("payments")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+            >
+              <CreditCard size={14} /> 💳 Payments Made ({payments.length})
+            </button>
+          </div>
+
+          <div style={{ position: "relative", minWidth: 220 }}>
+            <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+            <input
+              type="text"
+              placeholder="Search in this vendor…"
+              className="input-field"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              style={{ paddingLeft: 30, fontSize: 12, height: 32 }}
+            />
+          </div>
+        </div>
+
+        {/* Content based on Active Tab */}
+        {isLoading ? (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <div className="spinner" style={{ width: 30, height: 30, margin: "0 auto 10px", color: "var(--accent)" }} />
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading complete purchase history from database…</div>
+          </div>
+        ) : error ? (
+          <div style={{ padding: 20, background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b" }}>
+            Could not load purchase history for this vendor.
+          </div>
+        ) : activeTab === "items" ? (
+          /* TAB 1: RAW MATERIALS & CONSUMABLES BREAKDOWN TABLE */
+          <div style={{ overflowX: "auto" }}>
+            {filteredItems.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)" }}>
+                No materials purchased yet from this vendor.
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", textAlign: "left" }}>
+                    <th style={{ padding: "10px 12px" }}>#</th>
+                    <th style={{ padding: "10px 12px" }}>Raw Material / Item</th>
+                    <th style={{ padding: "10px 12px" }}>Category</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Total Qty Purchased</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Avg. Rate (₹)</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Total Spent (₹)</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center" }}>Orders</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Last Purchased</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.map((item, idx) => (
+                    <tr key={item.productId || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "10px 12px", color: "#94a3b8" }}>{idx + 1}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <div style={{ fontWeight: 700, color: "#0f172a" }}>{item.productName}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>SKU: {item.sku}</div>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{
+                          background: item.classification === "RAW_MATERIAL" ? "#dbeafe" : "#fef3c7",
+                          color: item.classification === "RAW_MATERIAL" ? "#1e40af" : "#92400e",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}>
+                          {item.classification === "RAW_MATERIAL" ? "🏭 Raw Material" : "⚡ Consumable"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>
+                        {item.totalQty.toLocaleString("en-IN")} {item.unit}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                        ₹{item.avgUnitCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / {item.unit}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, color: "#15803d" }}>
+                        ₹{item.totalSpend.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                        <span style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 10, fontSize: 12, fontWeight: 600 }}>
+                          {item.ordersCount}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#64748b" }}>
+                        {item.lastDate ? new Date(item.lastDate).toLocaleDateString("en-IN") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : activeTab === "orders" ? (
+          /* TAB 2: PURCHASE ORDERS LIST */
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {filteredOrders.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)" }}>
+                No purchase orders recorded for this vendor.
+              </div>
+            ) : (
+              filteredOrders.map((po) => (
+                <div key={po.id} style={{
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <strong style={{ fontSize: 15, color: "var(--text-primary)" }}>{po.number}</strong>
+                      <Badge status={po.status?.toLowerCase() ?? "draft"} />
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        📅 {po.date ? new Date(po.date).toLocaleDateString("en-IN") : "—"}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Total PO Value</div>
+                      <strong style={{ fontSize: 16, color: "#15803d" }}>{money(Number(po.total))}</strong>
+                    </div>
+                  </div>
+
+                  {/* PO Line Items */}
+                  <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 12px", marginTop: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>
+                      Items in this Order ({po.lines?.length || 0}):
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {(po.lines || []).map((l: any, i: number) => (
+                        <div key={l.id || i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", borderBottom: i !== po.lines.length - 1 ? "1px dashed #e2e8f0" : "none" }}>
+                          <div>
+                            <strong>{l.productName}</strong> <span style={{ color: "#64748b" }}>({l.sku})</span> — {l.quantity} {l.unit} @ ₹{l.unitCost} (+{l.taxRate}% tax)
+                          </div>
+                          <strong>₹{Number(l.amount).toLocaleString("en-IN")}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : activeTab === "bills" ? (
+          /* TAB 3: VENDOR BILLS & PAYMENT STATUS */
+          <div style={{ overflowX: "auto" }}>
+            {filteredBills.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)" }}>
+                No vendor bills on record.
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", textAlign: "left" }}>
+                    <th style={{ padding: "10px 12px" }}>Bill #</th>
+                    <th style={{ padding: "10px 12px" }}>Bill Date</th>
+                    <th style={{ padding: "10px 12px" }}>Due Date</th>
+                    <th style={{ padding: "10px 12px" }}>Status</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Bill Total</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Amount Paid</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Balance Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredBills.map((b) => (
+                    <tr key={b.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "10px 12px", fontWeight: 700 }}>{b.number}</td>
+                      <td style={{ padding: "10px 12px" }}>{b.date ? new Date(b.date).toLocaleDateString("en-IN") : "—"}</td>
+                      <td style={{ padding: "10px 12px" }}>{b.dueDate ? new Date(b.dueDate).toLocaleDateString("en-IN") : "—"}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{
+                          background: b.status === "PAID" ? "#dcfce7" : b.status === "PARTIAL" ? "#fef3c7" : "#fee2e2",
+                          color: b.status === "PAID" ? "#166534" : b.status === "PARTIAL" ? "#92400e" : "#991b1b",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}>
+                          {b.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>{money(Number(b.total))}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#16a34a", fontWeight: 700 }}>{money(Number(b.amountPaid))}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: b.balance > 0 ? "#b45309" : "#166534", fontWeight: 800 }}>
+                        {money(Number(b.balance))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : (
+          /* TAB 4: PAYMENTS MADE */
+          <div style={{ overflowX: "auto" }}>
+            {filteredPayments.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)" }}>
+                No payments recorded yet for this vendor.
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", color: "#64748b", textAlign: "left" }}>
+                    <th style={{ padding: "10px 12px" }}>Date</th>
+                    <th style={{ padding: "10px 12px" }}>Amount Paid</th>
+                    <th style={{ padding: "10px 12px" }}>Payment Method</th>
+                    <th style={{ padding: "10px 12px" }}>Allocated Bill(s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPayments.map((p, idx) => (
+                    <tr key={p.id || idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "10px 12px" }}>{p.paidAt ? new Date(p.paidAt).toLocaleDateString("en-IN") : "—"}</td>
+                      <td style={{ padding: "10px 12px", fontWeight: 800, color: "#16a34a" }}>{money(Number(p.amount))}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <span style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                          {p.method || "Bank Transfer"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px" }}>
+                        {(p.allocations || []).map((a: any) => a.billNumber).filter(Boolean).join(", ") || "Direct Payment"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -4390,6 +4948,9 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
   const [editParty, setEditParty] = useState<Party | null>(null);
   const [editSameAsBilling, setEditSameAsBilling] = useState(true);
   const [editForm, setEditForm] = useState(emptyForm);
+
+  // ── Vendor statement state ──
+  const [statementVendor, setStatementVendor] = useState<Party | null>(null);
 
   const f = (k: string) => (v: any) =>
     setForm((p) => {
@@ -4487,16 +5048,32 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
     },
     { label: "GSTIN", render: (r) => r.gstin ? <span className="font-mono" style={{ fontSize: 11 }}>{r.gstin}</span> : "—" },
     {
-      label: "Edit",
+      label: "Actions",
       align: "right",
       render: (r) => (
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={(e) => { e.stopPropagation(); openEdit(r); }}
-          style={{ fontSize: 11 }}
-        >
-          ✏️ Edit
-        </button>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          {!isCustomer && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{ background: "#2563eb", color: "#fff", border: "none", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setStatementVendor(r);
+              }}
+              title="View A to Z Complete Purchase History & Statement"
+            >
+              📜 Purchase History
+            </button>
+          )}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+            style={{ fontSize: 11 }}
+          >
+            ✏️ Edit
+          </button>
+        </div>
       ),
     },
   ];
@@ -4505,7 +5082,7 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
     <div>
       <PageHeader
         title={isCustomer ? "Customers" : "Vendors"}
-        subtitle={isCustomer ? "Manage customer directory, addresses & map location pins" : "Manage vendor directory & map location pins"}
+        subtitle={isCustomer ? "Manage customer directory, addresses & map location pins" : "Manage vendor directory, purchase histories & ledger statements"}
       >
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           <Plus size={15} /> Add {isCustomer ? "Customer" : "Vendor"}
@@ -4513,9 +5090,29 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
       </PageHeader>
 
       <div className="card">
-        <DataTable columns={columns} data={list.data ?? []} loading={list.isLoading} error={list.error}
-          searchFields={["name", "email", "phone", "city"]} emptyIcon={<Users size={48} />} emptyText={`No ${kind} yet`} />
+        <DataTable
+          columns={columns}
+          data={list.data ?? []}
+          loading={list.isLoading}
+          error={list.error}
+          searchFields={["name", "email", "phone", "city"]}
+          emptyIcon={<Users size={48} />}
+          emptyText={`No ${kind} yet`}
+          onRowClick={(row) => {
+            if (!isCustomer) {
+              setStatementVendor(row);
+            } else {
+              openEdit(row);
+            }
+          }}
+        />
       </div>
+
+      {/* ── Vendor Statement Modal ── */}
+      <VendorStatementModal
+        vendor={statementVendor}
+        onClose={() => setStatementVendor(null)}
+      />
 
       {/* ── Create Modal ── */}
       <Modal open={open} onClose={() => setOpen(false)} title={`Add New ${isCustomer ? "Customer" : "Vendor"}`}

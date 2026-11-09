@@ -68,4 +68,10 @@ export class PurchasesController {
   listReturns(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
     return this.purchases.listPurchaseReturns(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
   }
+
+  @Get("vendors/:id/purchase-history")
+  @RequirePermissions("vendor:read")
+  getVendorPurchaseHistory(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.purchases.getVendorPurchaseHistory(user.organizationId, id);
+  }
 }
