@@ -7496,7 +7496,7 @@ export function PurchaseOrdersPage() {
 
   const [view, setView] = useState<"table" | "kanban">("table");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ vendorId: "", warehouseId: "" });
+  const [form, setForm] = useState({ vendorId: "", warehouseId: "", number: "", notes: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
 
   const create = useMutation({
@@ -7508,6 +7508,8 @@ export function PurchaseOrdersPage() {
       return api.post("/purchase-orders", {
         vendorId: form.vendorId,
         warehouseId: form.warehouseId,
+        number: form.number?.trim() || undefined,
+        notes: form.notes?.trim() || undefined,
         lines: validLines.map((l) => ({
           productId: l.productId,
           quantity: l.quantity,
@@ -7519,6 +7521,7 @@ export function PurchaseOrdersPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["po"] });
       setOpen(false);
+      setForm({ vendorId: "", warehouseId: "", number: "", notes: "" });
       setLines([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
       toast("Purchase order created successfully");
     },
@@ -7609,7 +7612,7 @@ export function PurchaseOrdersPage() {
         <KanbanBoard columns={kanbanCols} onDrop={handleKanbanDrop} />
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Create Purchase Order with Multiple Items"
+      <Modal open={open} onClose={() => setOpen(false)} title="Create Purchase Order / Vendor Bill" wide={800}
         footer={
           <>
             <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
@@ -7619,6 +7622,41 @@ export function PurchaseOrdersPage() {
           </>
         }
       >
+        {/* Customizable Bill / PO Number Input */}
+        <div style={{
+          background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
+          border: "1px solid #cbd5e1",
+          borderRadius: 12,
+          padding: "14px 16px",
+          marginBottom: 16,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
+              <span>🧾 Bill / PO Number</span>
+              <span style={{ fontSize: 11, background: "#dbeafe", color: "#1e40af", padding: "1px 8px", borderRadius: 10, fontWeight: 600 }}>
+                Customizable (No default needed)
+              </span>
+            </label>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Vendor Bill / Invoice #</span>
+          </div>
+          <input
+            type="text"
+            className="input-field"
+            placeholder="e.g. BILL-9821, INV/2026/04, PO-7712 (Vendor kitta irunthu vantha bill number type pannalam)"
+            value={form.number}
+            onChange={(e) => setForm({ ...form, number: e.target.value })}
+            style={{
+              fontFamily: form.number ? "monospace" : "inherit",
+              fontWeight: form.number ? 700 : 400,
+              fontSize: 14,
+              background: "#ffffff",
+            }}
+          />
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 5, lineHeight: 1.4 }}>
+            💡 <strong>Vendor Bill Number:</strong> Vendor kitta irunthu vantha bill-oda original number-ai inge direct-aa type pannikalam. Default number thevai illai. Blank-aa vittal mattum system auto sequence assign pannum.
+          </div>
+        </div>
+
         <div className="form-grid form-grid-2" style={{ marginBottom: 16 }}>
           <SmartEntitySelect
             label="Vendor *"
@@ -7635,6 +7673,18 @@ export function PurchaseOrdersPage() {
             value={form.warehouseId}
             onChange={(val) => setForm({ ...form, warehouseId: val })}
             options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label className="form-label" style={{ fontSize: 12 }}>Notes / Reference (Optional)</label>
+          <input
+            type="text"
+            className="input-field"
+            placeholder="e.g. Delivery challan #, vehicle #, payment terms…"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            style={{ fontSize: 12 }}
           />
         </div>
 
@@ -8244,17 +8294,19 @@ export function BillsPage() {
   // Create-bill modal state
   const [billModal, setBillModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState("");
+  const [customBillNo, setCustomBillNo] = useState("");
 
   // Create bill from PO
   const createBill = useMutation({
-    mutationFn: () => api.post(`/bills/from-order/${selectedPO}`),
+    mutationFn: () => api.post(`/bills/from-order/${selectedPO}`, { number: customBillNo?.trim() || undefined }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bills"] });
       setBillModal(false);
       setSelectedPO("");
+      setCustomBillNo("");
       toast("Bill created successfully");
     },
-    onError: () => toast("Could not create bill. PO may already be billed.", "error"),
+    onError: (err: any) => toast(err.response?.data?.message ?? "Could not create bill. PO may already be billed.", "error"),
   });
 
   // Pay a bill
@@ -8413,7 +8465,14 @@ export function BillsPage() {
           <select
             className="input-field"
             value={selectedPO}
-            onChange={(e) => setSelectedPO(e.target.value)}
+            onChange={(e) => {
+              const poId = e.target.value;
+              setSelectedPO(poId);
+              const po = billablePOs.find((p) => p.id === poId);
+              if (po && po.number && !po.number.startsWith("PO-")) {
+                setCustomBillNo(po.number);
+              }
+            }}
           >
             <option value="">Select PO…</option>
             {billablePOs.map((po) => (
@@ -8423,6 +8482,24 @@ export function BillsPage() {
             ))}
           </select>
         </InputGroup>
+
+        <div style={{ marginTop: 12 }}>
+          <label className="form-label" style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
+            <span>🧾 Custom Bill Number (Optional)</span>
+            <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>✏️ Customizable</span>
+          </label>
+          <input
+            type="text"
+            className="input-field"
+            placeholder="e.g. BILL-991, INV-5021 (leave blank to auto-use PO / sequence number)"
+            value={customBillNo}
+            onChange={(e) => setCustomBillNo(e.target.value)}
+            style={{ fontFamily: customBillNo ? "monospace" : "inherit", fontWeight: customBillNo ? 700 : 400 }}
+          />
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+            💡 Vendor bill number customize pannalam. Blank-aa vittal PO number or auto sequence use aagum.
+          </div>
+        </div>
         {billablePOs.length === 0 && (
           <div style={{ marginTop: 12, padding: "12px 16px", background: "#fef3c7", borderRadius: 8, fontSize: 13, color: "#92400e", display: "flex", gap: 8 }}>
             <AlertTriangle size={15} />

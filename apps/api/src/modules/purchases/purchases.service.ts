@@ -44,7 +44,17 @@ export class PurchasesService {
       priced.map((p) => ({ quantity: p.quantity, unitPrice: p.unitCost, taxRate: p.taxRate })),
     );
     return this.prisma.$transaction(async (tx: any) => {
-      const number = await this.sequences.nextInTx(tx, orgId, "PO", "PO");
+      let number = dto.number?.trim();
+      if (number) {
+        const existing = await tx.purchaseOrder.findUnique({
+          where: { organizationId_number: { organizationId: orgId, number } },
+        });
+        if (existing) {
+          throw new BadRequestException(`Purchase order / bill number '${number}' already exists. Please enter a unique number.`);
+        }
+      } else {
+        number = await this.sequences.nextInTx(tx, orgId, "PO", "PO");
+      }
       return tx.purchaseOrder.create({
         data: {
           organizationId: orgId,
@@ -215,10 +225,25 @@ export class PurchasesService {
     });
   }
 
-  async createBillFromPO(orgId: string, purchaseOrderId: string) {
+  async createBillFromPO(orgId: string, purchaseOrderId: string, customNumber?: string) {
     const po = await this.getPO(orgId, purchaseOrderId);
     return this.prisma.$transaction(async (tx: any) => {
-      const number = await this.sequences.nextInTx(tx, orgId, "BILL", "BILL");
+      let number = customNumber?.trim();
+      if (number) {
+        const existing = await tx.bill.findUnique({
+          where: { organizationId_number: { organizationId: orgId, number } },
+        });
+        if (existing) {
+          throw new BadRequestException(`Bill number '${number}' already exists`);
+        }
+      } else if (po.number && !po.number.startsWith("PO-")) {
+        const existing = await tx.bill.findUnique({
+          where: { organizationId_number: { organizationId: orgId, number: po.number } },
+        });
+        number = existing ? await this.sequences.nextInTx(tx, orgId, "BILL", "BILL") : po.number;
+      } else {
+        number = await this.sequences.nextInTx(tx, orgId, "BILL", "BILL");
+      }
       return tx.bill.create({
         data: {
           organizationId: orgId,

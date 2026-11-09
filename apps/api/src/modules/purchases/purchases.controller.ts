@@ -41,8 +41,8 @@ export class PurchasesController {
 
   @Post("bills/from-order/:purchaseOrderId")
   @RequirePermissions("bill:create")
-  bill(@CurrentUser() user: AuthUser, @Param("purchaseOrderId") purchaseOrderId: string) {
-    return this.purchases.createBillFromPO(user.organizationId, purchaseOrderId);
+  bill(@CurrentUser() user: AuthUser, @Param("purchaseOrderId") purchaseOrderId: string, @Body() body?: { number?: string }) {
+    return this.purchases.createBillFromPO(user.organizationId, purchaseOrderId, body?.number);
   }
 
   @Get("bills")

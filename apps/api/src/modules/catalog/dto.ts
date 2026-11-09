@@ -386,6 +386,9 @@ export class CreatePurchaseOrderDto {
   vendorId!: string;
   @IsString()
   warehouseId!: string;
+  @IsOptional()
+  @IsString()
+  number?: string;
   @IsArray()
   @ArrayNotEmpty()
   @ValidateNested({ each: true })
