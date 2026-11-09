@@ -359,7 +359,7 @@ export class AuthService {
       { sub: userId, orgId: organizationId, email, permissions },
       {
         secret: this.config.getOrThrow("JWT_ACCESS_SECRET"),
-        expiresIn: this.config.get("JWT_ACCESS_EXPIRES_IN", "15m"),
+        expiresIn: this.config.get("JWT_ACCESS_EXPIRES_IN", "1d"),
       },
     );
 

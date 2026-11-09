@@ -15,7 +15,7 @@ import { EMAIL_PROVIDER, StubEmailProvider } from "../integrations/providers";
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow("JWT_ACCESS_SECRET"),
-        signOptions: { expiresIn: config.get("JWT_ACCESS_EXPIRES_IN", "15m") },
+        signOptions: { expiresIn: config.get("JWT_ACCESS_EXPIRES_IN", "1d") },
       }),
     }),
   ],
