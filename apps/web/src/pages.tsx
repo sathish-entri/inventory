@@ -2470,6 +2470,7 @@ export function RecipeModal({
   const { toast } = useToast();
   const allProducts = useList<any>("products", "/products");
   const [components, setComponents] = useState<Array<{ childProductId: string; quantity: number }>>([]);
+  const [inputMode, setInputMode] = useState<"per_ton" | "per_pack">("per_ton");
 
   useEffect(() => {
     if (product) {
@@ -2565,10 +2566,36 @@ export function RecipeModal({
           </div>
         </div>
 
+        {/* Formula Mode Toggle: 1 Ton Batch vs Single Pack */}
+        <div style={{ background: "#f1f5f9", padding: 4, borderRadius: 10, display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            className={`btn btn-sm ${inputMode === "per_ton" ? "btn-primary" : "btn-secondary"}`}
+            style={{ flex: 1, border: "none", fontWeight: 700, fontSize: 12 }}
+            onClick={() => setInputMode("per_ton")}
+          >
+            🏭 1 Ton Batch Formula (1,000 kg = 40 Packs of 25kg)
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${inputMode === "per_pack" ? "btn-primary" : "btn-secondary"}`}
+            style={{ flex: 1, border: "none", fontWeight: 700, fontSize: 12 }}
+            onClick={() => setInputMode("per_pack")}
+          >
+            📦 Single 25kg Pack Formula
+          </button>
+        </div>
+
+        {inputMode === "per_ton" && (
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: "10px 14px", borderRadius: 8, fontSize: 12, color: "#1e3a8a", lineHeight: 1.5 }}>
+            💡 <strong>Factory 1 Ton Batch Mode:</strong> Single 25kg pack-ku calculate panna thevai illai! 1 Ton (1,000 kg) production-ku ungalukku theringa raw materials & gas counts-ai type pannunga (e.g. 960 kg Wire rod, 50 kg Flux, 2 cyl Argon). System-e automatic-aa <strong>divide by 40</strong> panni 25kg pack formula-ai set pannikkum!
+          </div>
+        )}
+
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>
-              RAW MATERIALS & GAS INGREDIENTS
+              {inputMode === "per_ton" ? "RAW MATERIALS FOR 1 TON BATCH (1,000 KG)" : "RAW MATERIALS PER SINGLE 25KG PACK"}
             </span>
             <button type="button" className="btn btn-secondary btn-sm" onClick={addComponent}>
               <Plus size={13} /> Add Material
@@ -2577,26 +2604,27 @@ export function RecipeModal({
 
           {components.length === 0 ? (
             <div style={{ padding: "20px", textAlign: "center", border: "1px dashed #cbd5e1", borderRadius: 8, color: "var(--text-muted)", fontSize: 13 }}>
-              No materials configured yet. Click <strong>"+ Add Material"</strong> to add required wire, gas, wood, or chemicals.
+              No materials configured yet. Click <strong>"+ Add Material"</strong> to add required wire, gas, or chemicals.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {components.map((comp, idx) => {
                 const raw = (allProducts.data ?? []).find((p: any) => p.id === comp.childProductId);
                 const subCost = (Number(raw?.costPrice) || 0) * (Number(comp.quantity) || 0);
+                const tonQty = Number((comp.quantity * 40).toFixed(3));
 
                 return (
                   <div
                     key={idx}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "2.5fr 1fr 1fr auto",
+                      gridTemplateColumns: "2.3fr 1.3fr 0.9fr auto",
                       gap: 10,
                       alignItems: "center",
                       background: "#fff",
                       border: "1px solid #e2e8f0",
-                      borderRadius: 6,
-                      padding: "8px 10px",
+                      borderRadius: 8,
+                      padding: "10px 12px",
                     }}
                   >
                     <div>
@@ -2618,16 +2646,28 @@ export function RecipeModal({
                     </div>
 
                     <div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>
+                        {inputMode === "per_ton" ? "1 Ton Qty (kg / cyl)" : "1 Pack Qty (kg)"}
+                      </div>
                       <NumberStepper
-                        value={comp.quantity}
-                        onChange={(val) => updateComponent(idx, "quantity", val)}
+                        value={inputMode === "per_ton" ? tonQty : comp.quantity}
+                        onChange={(val) => {
+                          const perPack = inputMode === "per_ton" ? Number((val / 40).toFixed(4)) : val;
+                          updateComponent(idx, "quantity", perPack);
+                        }}
                         min={0.0001}
-                        step={0.5}
+                        step={inputMode === "per_ton" ? 1 : 0.05}
                         size="sm"
                       />
+                      {inputMode === "per_ton" && (
+                        <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>
+                          = {comp.quantity.toFixed(3)} / pack
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Pack Cost</div>
                       {money(subCost)}
                     </div>
 
