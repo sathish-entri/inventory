@@ -4381,7 +4381,7 @@ export function VendorStatementModal({
   vendor: Party | null;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"items" | "orders" | "bills" | "payments">("items");
+  const [activeTab, setActiveTab] = useState<"items" | "orders" | "bills" | "payments">("items");
   const [q, setQ] = useState("");
 
   const { data, isLoading, error, refetch } = useQuery({
