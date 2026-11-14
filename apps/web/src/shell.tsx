@@ -83,30 +83,59 @@ const allModules = [
   },
 ];
 
-// Mobile Primary Menu matching reference image exactly
-const mobilePrimaryMenu = [
-  { to: "/", label: "Dashboard", icon: LayoutGrid, bg: "#EDE9FE", color: "#5146E5", end: true },
-  { to: "/products", label: "Products", icon: Package, bg: "#DBEAFE", color: "#2563EB" },
-  { to: "/customers", label: "Customers", icon: Users, bg: "#D1FAE5", color: "#059669" },
-  { to: "/vendors", label: "Vendors", icon: Truck, bg: "#FFEDD5", color: "#EA580C" },
-  { to: "/invoices", label: "Invoices", icon: FileText, bg: "#FCE7F3", color: "#DB2777" },
-  { to: "/sales-orders", label: "Sales Orders", icon: ShoppingCart, bg: "#CCFBF1", color: "#0D9488" },
-  { to: "/purchase-orders", label: "Purchase Orders", icon: ShoppingBag, bg: "#F3E8FF", color: "#9333EA" },
-  { to: "/inventory", label: "Inventory", icon: Archive, bg: "#E0E7FF", color: "#4F46E5" },
-  { to: "/warehouses", label: "Warehouses", icon: Warehouse, bg: "#E0F2FE", color: "#0284C7" },
-  { to: "/reports", label: "Reports & Analytics", icon: BarChart3, bg: "#DCFCE7", color: "#16A34A" },
-  { to: "/settings", label: "Settings & Configuration", icon: Settings, bg: "#EDE9FE", color: "#7C3AED" },
-];
-
-const mobileExtraMenu = [
-  { to: "/manufacturing", label: "Production & BOM Formula", icon: Boxes, bg: "#FEF3C7", color: "#D97706" },
-  { to: "/estimates", label: "Estimates & Quotes", icon: FileCheck, bg: "#CFFAFE", color: "#0891B2" },
-  { to: "/payments", label: "Payments Received", icon: DollarSign, bg: "#DCFCE7", color: "#16A34A" },
-  { to: "/adjustments", label: "Stock Adjustments", icon: RefreshCw, bg: "#EDE9FE", color: "#6366F1" },
-  { to: "/transfers", label: "Warehouse Transfers", icon: ArrowLeftRight, bg: "#DBEAFE", color: "#2563EB" },
-  { to: "/users", label: "Users & Staff Roles", icon: UserCog, bg: "#E2E8F0", color: "#475569" },
-  { to: "/audit", label: "Audit & Security Log", icon: ClipboardList, bg: "#FFE4E6", color: "#E11D48" },
-  { to: "/integrations", label: "API Integrations", icon: Plug, bg: "#EDE9FE", color: "#7C3AED" },
+// Categorized Mobile Menu Sections matching reference design colors and ERP architecture
+const mobileMenuSections = [
+  {
+    title: "Overview",
+    items: [
+      { to: "/", label: "Dashboard", icon: LayoutGrid, bg: "#EDE9FE", color: "#5146E5", end: true },
+      { to: "/reports", label: "Analytics & Reports", icon: BarChart3, bg: "#DCFCE7", color: "#16A34A" },
+      { to: "/notifications", label: "Notifications", icon: Bell, bg: "#DBEAFE", color: "#2563EB" },
+    ],
+  },
+  {
+    title: "Inventory & Warehouses",
+    items: [
+      { to: "/products", label: "Products & Consumables", icon: Package, bg: "#DBEAFE", color: "#2563EB" },
+      { to: "/warehouses", label: "Warehouses Hubs", icon: Warehouse, bg: "#E0F2FE", color: "#0284C7" },
+      { to: "/inventory", label: "Physical Inventory", icon: Archive, bg: "#E0E7FF", color: "#4F46E5" },
+      { to: "/manufacturing", label: "Production & BOM Formula", icon: Boxes, bg: "#FEF3C7", color: "#D97706" },
+      { to: "/adjustments", label: "Stock Adjustments", icon: RefreshCw, bg: "#EDE9FE", color: "#6366F1" },
+      { to: "/transfers", label: "Warehouse Transfers", icon: ArrowLeftRight, bg: "#CFFAFE", color: "#0891B2" },
+    ],
+  },
+  {
+    title: "Sales Operations",
+    items: [
+      { to: "/customers", label: "Customers Directory", icon: Users, bg: "#D1FAE5", color: "#059669" },
+      { to: "/estimates", label: "Estimates & Quotes", icon: FileText, bg: "#E0F2FE", color: "#0284C7" },
+      { to: "/sales-orders", label: "Sales Orders", icon: ShoppingCart, bg: "#CCFBF1", color: "#0D9488" },
+      { to: "/packages", label: "Packaging & Boxes", icon: Box, bg: "#FFEDD5", color: "#EA580C" },
+      { to: "/shipments", label: "Shipments & Logistics", icon: Truck, bg: "#E0E7FF", color: "#4338CA" },
+      { to: "/invoices", label: "Invoices & Billing", icon: Receipt, bg: "#FCE7F3", color: "#DB2777" },
+      { to: "/payments", label: "Payments Received", icon: DollarSign, bg: "#DCFCE7", color: "#16A34A" },
+      { to: "/sales-returns", label: "Sales Returns", icon: RotateCcw, bg: "#FEF3C7", color: "#D97706" },
+    ],
+  },
+  {
+    title: "Purchasing",
+    items: [
+      { to: "/vendors", label: "Vendors Directory", icon: ShoppingBag, bg: "#FFEDD5", color: "#EA580C" },
+      { to: "/purchase-orders", label: "Purchase Orders", icon: ClipboardList, bg: "#F3E8FF", color: "#9333EA" },
+      { to: "/receives", label: "Material Receives", icon: Download, bg: "#DBEAFE", color: "#2563EB" },
+      { to: "/bills", label: "Vendor Bills", icon: FileCheck, bg: "#EDE9FE", color: "#6366F1" },
+      { to: "/purchase-returns", label: "Purchase Returns", icon: RotateCcw, bg: "#FFE4E6", color: "#E11D48" },
+    ],
+  },
+  {
+    title: "Administration",
+    items: [
+      { to: "/users", label: "Users & Staff Roles", icon: UserCog, bg: "#E2E8F0", color: "#475569" },
+      { to: "/audit", label: "Audit & Security Log", icon: ClipboardList, bg: "#FFE4E6", color: "#E11D48" },
+      { to: "/integrations", label: "API Integrations", icon: Plug, bg: "#EDE9FE", color: "#7C3AED" },
+      { to: "/settings", label: "Company Settings", icon: Settings, bg: "#EDE9FE", color: "#7C3AED" },
+    ],
+  },
 ];
 
 interface BeforeInstallPromptEvent extends Event {
@@ -622,64 +651,32 @@ export function AppShell() {
               </div>
             </div>
 
-            {/* Primary Menu Items matching reference image */}
-            {mobilePrimaryMenu.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
-                  onClick={closeSidebar}
-                >
-                  <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
-                    <Icon size={19} />
-                  </div>
-                  <span className="m-menu-label">{item.label}</span>
-                  <ChevronRight size={16} className="m-menu-arrow" />
-                </NavLink>
-              );
-            })}
-
-            {/* Expand / Collapse Button for More Operations */}
-            <button
-              type="button"
-              className="m-menu-more-btn"
-              onClick={() => setMobileMoreOpen((p) => !p)}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Sparkles size={16} />
-                <span>{mobileMoreOpen ? "Hide Extra Modules" : "More Operations (8 Modules)"}</span>
+            {/* Categorized Menu Sections matching reference styling */}
+            {mobileMenuSections.map((sec) => (
+              <div key={sec.title} className="m-menu-section">
+                <div className="m-menu-section-title">
+                  <span>{sec.title}</span>
+                </div>
+                {sec.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={(item as any).end}
+                      className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
+                      onClick={closeSidebar}
+                    >
+                      <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
+                        <Icon size={19} />
+                      </div>
+                      <span className="m-menu-label">{item.label}</span>
+                      <ChevronRight size={16} className="m-menu-arrow" />
+                    </NavLink>
+                  );
+                })}
               </div>
-              <ChevronDown
-                size={16}
-                style={{
-                  transform: mobileMoreOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 180ms ease",
-                }}
-              />
-            </button>
-
-            {/* Extra Modules List */}
-            {mobileMoreOpen &&
-              mobileExtraMenu.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
-                    onClick={closeSidebar}
-                  >
-                    <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
-                      <Icon size={18} />
-                    </div>
-                    <span className="m-menu-label">{item.label}</span>
-                    <ChevronRight size={16} className="m-menu-arrow" />
-                  </NavLink>
-                );
-              })}
+            ))}
 
             {/* Separate Logout Card */}
             <div

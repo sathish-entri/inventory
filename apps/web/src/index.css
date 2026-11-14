@@ -3125,6 +3125,33 @@ select.input-field { cursor: pointer; }
     gap: 4px;
   }
 
+  /* Section Grouping */
+  .m-menu-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .m-menu-section-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #64748B;
+    padding: 10px 4px 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .m-menu-section-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #E2E8F0;
+    opacity: 0.7;
+  }
+
   /* Menu Items list */
   .m-menu-item {
     background: #FFFFFF;
@@ -3275,6 +3302,12 @@ select.input-field { cursor: pointer; }
   }
   [data-theme="dark"] .m-menu-item.active .m-menu-label {
     color: #A5B4FC !important;
+  }
+  [data-theme="dark"] .m-menu-section-title {
+    color: #94A3B8 !important;
+  }
+  [data-theme="dark"] .m-menu-section-title::after {
+    background: #1E293B !important;
   }
   [data-theme="dark"] .m-logout-card {
     background: rgba(239, 68, 68, 0.12) !important;
