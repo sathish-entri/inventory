@@ -40,3 +40,4 @@ export class PurchaseReturnQueryDto extends PaginationQueryDto {
   @IsString()
   vendorId?: string;
 }
+

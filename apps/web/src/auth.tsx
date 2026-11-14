@@ -8,6 +8,7 @@ export interface SessionUser {
   lastName: string;
   organization: { id: string; name: string; slug: string };
   permissions: string[];
+  role?: string;
 }
 
 interface AuthCtx {

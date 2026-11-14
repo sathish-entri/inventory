@@ -45,13 +45,15 @@ export function applyRelease(stock: StockSnapshot, qty: number): StockSnapshot {
 /** Ship goods: physical down, reserved down (if reserved), available updated. */
 export function applyShipment(stock: StockSnapshot, qty: number, allowNegative = false): StockSnapshot {
   if (qty <= 0) throw new Error("Shipment quantity must be positive");
+  if (stock.reservedQuantity < qty) {
+    throw new Error("Cannot ship more than reserved");
+  }
   if (!allowNegative && stock.quantity < qty) {
     throw new Error("Cannot ship more than physical stock");
   }
-  const reservedDeduct = Math.min(stock.reservedQuantity, qty);
   return {
     quantity: round4(stock.quantity - qty),
-    reservedQuantity: round4(stock.reservedQuantity - reservedDeduct),
+    reservedQuantity: round4(stock.reservedQuantity - qty),
   };
 }
 

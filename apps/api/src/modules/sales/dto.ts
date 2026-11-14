@@ -86,3 +86,4 @@ export class SalesReturnQueryDto extends PaginationQueryDto {
   @IsString()
   customerId?: string;
 }
+

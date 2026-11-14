@@ -34,7 +34,8 @@ import {
   FileText, CreditCard, Boxes, FileCheck,
   Building2, UserCog, ClipboardList,
   Archive, ArrowLeftRight, Box, Receipt, RotateCcw,
-  Trash2, GripVertical, Kanban, List, Sparkles, Calculator, Printer, Filter, MapPin, Compass, Navigation, Map,
+  Trash2, GripVertical, Kanban, List, Sparkles, Calculator, Printer, Filter, MapPin, Compass, Navigation, Map as MapIcon,
+  PieChart as PieChartIcon, CheckCircle2,
   Pencil,
   HelpCircle,
   BookOpen,
@@ -2700,7 +2701,7 @@ export function DashboardPage() {
         <div className="oscar-panel-card">
           <div className="oscar-panel-header">
             <div className="oscar-panel-title">
-              <PieChart size={18} color="#6366F1" /> Business Analytics
+              <PieChartIcon size={18} color="#6366F1" /> Business Analytics
             </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, background: "var(--surface-2)", padding: "3px 10px", borderRadius: 8, border: "1px solid var(--border)" }}>
               This Month ▾
@@ -3394,6 +3395,7 @@ type Product = {
 export function ProductsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const products = useList<Product>("products", "/products");
   const [open, setOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -6884,6 +6886,7 @@ type Estimate = {
   status: string;
   expiryDate?: string;
   createdAt?: string;
+  date?: string;
   customer?: { id: string; name: string };
   lines?: { productId: string; quantity: string; unitPrice: string; taxRate: string }[];
 };
@@ -7247,7 +7250,13 @@ export function EstimatesPage() {
     { label: "Estimate #", render: (r) => <strong>{r.number}</strong> },
     { label: "Customer", render: (r) => r.customer?.name ?? "—" },
     { label: "Status", render: (r) => <Badge status={r.status ?? "draft"} /> },
-    { label: "Date / Expiry", render: (r) => (r.date || r.createdAt) ? new Date(r.date || r.createdAt).toLocaleDateString() : (r.expiryDate ? new Date(r.expiryDate).toLocaleDateString() : "—") },
+    {
+      label: "Date / Expiry",
+      render: (r) => {
+        const d = r.date || r.createdAt || r.expiryDate;
+        return d ? new Date(d).toLocaleDateString() : "—";
+      },
+    },
     { label: "Total Quote", align: "right", render: (r) => <strong>{money(Number(r.total))}</strong> },
     {
       label: "Actions",
@@ -10591,6 +10600,9 @@ export function ReportsPage() {
   const inv = useQuery({ queryKey: ["rep-inv"], queryFn: async () => (await api.get("/reports/inventory")).data });
   const low = useQuery({ queryKey: ["rep-low"], queryFn: async () => (await api.get("/reports/low-stock")).data });
 
+  const invRows = Array.isArray(inv.data) ? inv.data : (inv.data?.data ?? []);
+  const lowRows = Array.isArray(low.data) ? low.data : (low.data?.data ?? []);
+
   return (
     <div>
       <PageHeader title="Reports" subtitle="Inventory analytics & insights" />
@@ -10608,7 +10620,7 @@ export function ReportsPage() {
               <table className="data-table">
                 <thead><tr><th>SKU</th><th>Item</th><th>Warehouse</th><th style={{ textAlign: "right" }}>Qty</th><th style={{ textAlign: "right" }}>Value</th></tr></thead>
                 <tbody>
-                  {(inv.data ?? []).map((r: { sku: string; name: string; warehouse: string; quantity: number; value: number }, i: number) => (
+                  {invRows.map((r: { sku: string; name: string; warehouse: string; quantity: number; value: number }, i: number) => (
                     <tr key={i}>
                       <td><span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: 4, fontSize: 11 }}>{r.sku}</span></td>
                       <td style={{ fontWeight: 600 }}>{r.name}</td>
@@ -10617,7 +10629,7 @@ export function ReportsPage() {
                       <td style={{ textAlign: "right" }}><strong>{money(r.value)}</strong></td>
                     </tr>
                   ))}
-                  {(inv.data ?? []).length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)", padding: "30px 0" }}>No inventory data.</td></tr>}
+                  {invRows.length === 0 && <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)", padding: "30px 0" }}>No inventory data.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -10640,7 +10652,7 @@ export function ReportsPage() {
               <table className="data-table">
                 <thead><tr><th>SKU</th><th>Item</th><th style={{ textAlign: "right" }}>Available</th><th style={{ textAlign: "right" }}>Reorder Level</th></tr></thead>
                 <tbody>
-                  {(low.data ?? []).map((r: { sku: string; name: string; available: number; reorderLevel?: number }, i: number) => (
+                  {lowRows.map((r: { sku: string; name: string; available: number; reorderLevel?: number }, i: number) => (
                     <tr key={i}>
                       <td><span className="font-mono" style={{ background: "#fee2e2", padding: "2px 6px", borderRadius: 4, fontSize: 11, color: "var(--danger)" }}>{r.sku}</span></td>
                       <td style={{ fontWeight: 600 }}>{r.name}</td>
@@ -10648,7 +10660,7 @@ export function ReportsPage() {
                       <td style={{ textAlign: "right", color: "var(--text-muted)" }}>{r.reorderLevel ?? "—"}</td>
                     </tr>
                   ))}
-                  {(low.data ?? []).length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--text-muted)", padding: "30px 0" }}>✓ All items are well-stocked.</td></tr>}
+                  {lowRows.length === 0 && <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--text-muted)", padding: "30px 0" }}>✓ All items are well-stocked.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -10665,7 +10677,7 @@ export function ReportsPage() {
 type User = { id: string; firstName: string; lastName: string; email: string; isActive: boolean };
 
 export function UsersPage() {
-  const list = useQuery({ queryKey: ["users"], queryFn: async () => (await api.get("/users")).data });
+  const list = useList<User>("users", "/users");
   const users: User[] = list.data ?? [];
 
   const columns: Column<User>[] = [
@@ -11309,7 +11321,7 @@ export function ManufacturingPage() {
             className={`btn ${tab === "history" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setTab("history")}
           >
-            📜 Production History ({(runs.data?.data ?? []).length})
+            📜 Production History ({(runs.data ?? []).length})
           </button>
           <button
             className={`btn ${tab === "recipes" ? "btn-primary" : "btn-secondary"}`}
@@ -12478,7 +12490,7 @@ export function ManufacturingPage() {
             <InfoTooltip text="Factory-la ithuvarai run aana total production batch runs count." />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", marginTop: 4 }}>
-            {(runs.data?.data ?? []).length}
+            {(runs.data ?? []).length}
           </div>
         </div>
         <div className="card" style={{ padding: 16 }}>
@@ -12487,7 +12499,7 @@ export function ManufacturingPage() {
             <InfoTooltip text="Production batches moolama ithuvarai total-ah ready aana finished units count." />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", marginTop: 4 }}>
-            {(runs.data?.data ?? []).reduce((acc: number, r: any) => acc + (Number(r.quantityProduced) || 0), 0)}
+            {(runs.data ?? []).reduce((acc: number, r: any) => acc + (Number(r.quantityProduced) || 0), 0)}
           </div>
         </div>
         <div className="card" style={{ padding: 16 }}>
@@ -12780,7 +12792,7 @@ export function ManufacturingPage() {
         <div className="card">
           <DataTable
             columns={runColumns}
-            data={runs.data?.data ?? []}
+            data={runs.data ?? []}
             loading={runs.isLoading}
             error={runs.error}
             searchFields={["runNumber"]}
