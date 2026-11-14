@@ -59,6 +59,7 @@ import {
   Send,
   Heart,
   Eye,
+  EyeOff,
   FileSpreadsheet,
   Upload,
   SlidersHorizontal,
@@ -146,6 +147,7 @@ export function LoginPage() {
   const nav = useNavigate();
   const [email, setEmail] = useState("admin@demo.local");
   const [password, setPassword] = useState("Admin123!");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -212,7 +214,40 @@ export function LoginPage() {
               <input className="input-field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
             </InputGroup>
             <InputGroup label="Password">
-              <input className="input-field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <div style={{ position: "relative", width: "100%", display: "flex", alignItems: "center" }}>
+                <input
+                  className="input-field"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ paddingRight: 42 }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  style={{
+                    position: "absolute",
+                    right: 12,
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    cursor: "pointer",
+                    color: "var(--text-muted, #64748b)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 6,
+                    transition: "color 150ms",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary, #1e293b)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted, #64748b)")}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </InputGroup>
             <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", padding: "11px 16px", fontSize: 14, marginTop: 4 }} disabled={loading}>
               {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : null}
@@ -239,6 +274,7 @@ export function RegisterPage() {
   const { register } = useAuth();
   const nav = useNavigate();
   const [form, setForm] = useState({ organizationName: "", firstName: "", lastName: "", email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -299,13 +335,50 @@ export function RegisterPage() {
             )}
             {fields.map(({ key, label, type }) => (
               <InputGroup key={key} label={label}>
-                <input
-                  className="input-field"
-                  type={type ?? "text"}
-                  value={form[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  required
-                />
+                {key === "password" ? (
+                  <div style={{ position: "relative", width: "100%", display: "flex", alignItems: "center" }}>
+                    <input
+                      className="input-field"
+                      type={showPassword ? "text" : "password"}
+                      value={form[key]}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      style={{ paddingRight: 42 }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((p) => !p)}
+                      style={{
+                        position: "absolute",
+                        right: 12,
+                        background: "none",
+                        border: "none",
+                        padding: "4px",
+                        cursor: "pointer",
+                        color: "var(--text-muted, #64748b)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 6,
+                        transition: "color 150ms",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary, #1e293b)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted, #64748b)")}
+                      title={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    className="input-field"
+                    type={type ?? "text"}
+                    value={form[key]}
+                    onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                    required
+                  />
+                )}
               </InputGroup>
             ))}
             <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", padding: "11px 16px", fontSize: 14, marginTop: 4 }} disabled={loading}>
