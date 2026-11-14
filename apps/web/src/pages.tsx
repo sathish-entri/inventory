@@ -11400,9 +11400,8 @@ export function ManufacturingPage() {
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={handleAutoCalculateInwards}
-                  title="Auto-calculate required raw materials based on finished goods recipes"
                 >
-                  <Sparkles size={14} color="#d97706" /> 🪄 Auto-Calculate Inwards from Recipes
+                  🥣 Auto-Calculate from Recipes
                 </button>
                 <InfoTooltip text="Inniku ready aana finished goods counts-ah paathu, BOM recipes padi thevaiana raw materials & gas-ah right side-la automatic ah calculate panni load pannum. Ungalukku yetha maari adjust-um pannikalam." align="right" />
               </div>
