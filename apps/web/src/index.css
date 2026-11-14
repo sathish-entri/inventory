@@ -1568,21 +1568,14 @@ select.input-field { cursor: pointer; }
     pointer-events: auto !important;
   }
 
-  .sidebar-overlay {
-    display: none;
-    position: fixed !important;
-    inset: 0 !important;
-    background: rgba(15, 23, 42, 0.7) !important;
-    backdrop-filter: blur(4px) !important;
-    -webkit-backdrop-filter: blur(4px) !important;
-    z-index: 99 !important;
-    opacity: 0;
-    transition: opacity 250ms ease !important;
-  }
-
+  .sidebar-overlay,
   .sidebar-overlay.open {
-    display: block !important;
-    opacity: 1 !important;
+    display: none !important;
+    opacity: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
   }
 
   .sidebar-close-btn {
@@ -2798,6 +2791,8 @@ select.input-field { cursor: pointer; }
 /* ── Mobile-only display helpers ── */
 .mobile-only { display: none; }
 .desktop-only { display: block; }
+.mobile-menu-screen { display: none !important; }
+.desktop-sidebar { display: flex !important; width: var(--sidebar-w) !important; flex-shrink: 0 !important; }
 
 @media (max-width: 1024px) {
   /* ── Mint background token for mobile ── */
@@ -2924,8 +2919,11 @@ select.input-field { cursor: pointer; }
   .desktop-sidebar {
     display: none !important;
   }
-  .sidebar-overlay {
+  .sidebar-overlay,
+  .sidebar-overlay.open {
     display: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 
   .mobile-menu-screen {

@@ -132,6 +132,15 @@ export function AppShell() {
   const [isInstalled, setIsInstalled] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= 1024 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 1024);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Auto-close sidebar on navigation
   useEffect(() => {
@@ -253,422 +262,379 @@ export function AppShell() {
 
   return (
     <div className="app-layout">
-      {/* ── Mobile Overlay ── */}
-      <div
-        className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`}
-        onClick={closeSidebar}
-        aria-hidden="true"
-      />
-
       {/* ── Dark Premium Sidebar (Desktop Only) ── */}
-      <aside className={`sidebar desktop-sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Sidebar Navigation">
-        {/* Brand Header */}
-        <div className="sidebar-logo">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 12,
-                background: "linear-gradient(135deg, #5146E5 0%, #6366F1 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 4px 14px rgba(81, 70, 229, 0.45)",
-                flexShrink: 0,
-              }}
-            >
-              <ShoppingCart size={20} color="#ffffff" />
-            </div>
-            <div style={{ minWidth: 0 }}>
+      {!isMobile && (
+        <aside className="sidebar desktop-sidebar" aria-label="Sidebar Navigation">
+          {/* Brand Header */}
+          <div className="sidebar-logo">
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: "#ffffff",
-                  letterSpacing: "-0.4px",
-                  lineHeight: 1.2,
-                }}
-              >
-                Oscar
-              </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#94A3B8",
-                  fontWeight: 500,
-                  marginTop: 2,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                Inventory Operations
-              </div>
-            </div>
-          </div>
-          <button
-            className="sidebar-close-btn"
-            onClick={closeSidebar}
-            title="Close menu"
-            aria-label="Close menu"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Navigation Items */}
-        <nav className="sidebar-nav">
-          {!showAllModules ? (
-            <div style={{ padding: "8px 0" }}>
-              {primaryNav.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
-                    onClick={closeSidebar}
-                  >
-                    <Icon size={18} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                );
-              })}
-
-              <div style={{ padding: "8px 12px 0" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAllModules(true)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px dashed rgba(255,255,255,0.12)",
-                    borderRadius: 10,
-                    color: "#94A3B8",
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 150ms",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#94A3B8")}
-                >
-                  <span>More Operations (18 Modules)</span>
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding: "4px 0" }}>
-              <div style={{ padding: "0 14px 6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.8 }}>All Operations</span>
-                <button
-                  type="button"
-                  onClick={() => setShowAllModules(false)}
-                  style={{ background: "none", border: "none", color: "#818CF8", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}
-                >
-                  ← Main Menu
-                </button>
-              </div>
-              {allModules.map((g) => (
-                <div key={g.title} style={{ marginBottom: 12 }}>
-                  <div className="sidebar-group-label">{g.title}</div>
-                  {g.items.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        end={item.end}
-                        className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
-                        onClick={closeSidebar}
-                      >
-                        <Icon size={17} />
-                        <span>{item.label}</span>
-                      </NavLink>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Upgrade to Pro Card Widget (Matching Mockup) */}
-          <div style={{ padding: "14px 12px 6px" }}>
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(81, 70, 229, 0.22) 0%, rgba(99, 102, 241, 0.12) 100%)",
-                border: "1px solid rgba(99, 102, 241, 0.28)",
-                borderRadius: 14,
-                padding: "16px 14px",
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 8,
-                    background: "linear-gradient(135deg, #818CF8, #4F46E5)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 2px 8px rgba(79, 70, 229, 0.4)",
-                  }}
-                >
-                  <Rocket size={14} color="#ffffff" />
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#ffffff" }}>
-                  Upgrade to Pro
-                </div>
-              </div>
-              <p style={{ margin: "0 0 12px", fontSize: 11, color: "#94A3B8", lineHeight: 1.4 }}>
-                Get advanced analytics and more features.
-              </p>
-              <button
-                type="button"
-                onClick={() => nav("/reports")}
-                style={{
-                  width: "100%",
-                  padding: "7px 12px",
-                  borderRadius: 8,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
                   background: "linear-gradient(135deg, #5146E5 0%, #6366F1 100%)",
-                  border: "none",
-                  color: "#ffffff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 6,
-                  boxShadow: "0 2px 8px rgba(81, 70, 229, 0.35)",
-                }}
-              >
-                <span>Upgrade Now</span>
-                <span>→</span>
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        {/* Sidebar Footer with User Profile */}
-        <div className="sidebar-footer">
-          {!isInstalled && (
-            <button
-              onClick={handleInstallClick}
-              className="sidebar-install-btn"
-              title="Install Oscar as App"
-            >
-              <Download size={15} />
-              <span>Install App</span>
-            </button>
-          )}
-
-          <div
-            className="sidebar-user"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "6px 8px",
-              background: "rgba(255,255,255,0.04)",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "#ffffff",
+                  boxShadow: "0 4px 14px rgba(81, 70, 229, 0.45)",
                   flexShrink: 0,
                 }}
               >
-                {initials}
+                <ShoppingCart size={20} color="#ffffff" />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 12,
-                    fontWeight: 700,
+                    fontSize: 18,
+                    fontWeight: 800,
                     color: "#ffffff",
+                    letterSpacing: "-0.4px",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Oscar
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#94A3B8",
+                    fontWeight: 500,
+                    marginTop: 2,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                   }}
                 >
-                  {displayName}
-                </div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>
-                  {user?.role ?? "Admin"}
+                  Inventory Operations
                 </div>
               </div>
             </div>
-
             <button
-              onClick={() => void logout().then(() => nav("/login"))}
-              title="Sign out"
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "rgba(255,255,255,0.5)",
-                cursor: "pointer",
-                padding: 6,
-                borderRadius: 8,
-                display: "flex",
-                transition: "color 150ms",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#EF4444")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
+              className="sidebar-close-btn"
+              onClick={closeSidebar}
+              title="Close menu"
+              aria-label="Close menu"
             >
-              <LogOut size={16} />
+              <X size={20} />
             </button>
           </div>
-        </div>
-      </aside>
+
+          {/* Navigation Items */}
+          <nav className="sidebar-nav">
+            {!showAllModules ? (
+              <div style={{ padding: "8px 0" }}>
+                {primaryNav.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+                      onClick={closeSidebar}
+                    >
+                      <Icon size={18} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  );
+                })}
+
+                <div style={{ padding: "8px 12px 0" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllModules(true)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px dashed rgba(255,255,255,0.12)",
+                      borderRadius: 10,
+                      color: "#94A3B8",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 150ms",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#ffffff")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "#94A3B8")}
+                  >
+                    <span>More Operations (18 Modules)</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: "4px 0" }}>
+                <div style={{ padding: "0 14px 6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.8 }}>All Operations</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllModules(false)}
+                    style={{ background: "none", border: "none", color: "#818CF8", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                  >
+                    ← Main Menu
+                  </button>
+                </div>
+                {allModules.map((g) => (
+                  <div key={g.title} style={{ marginBottom: 12 }}>
+                    <div className="sidebar-group-label">{g.title}</div>
+                    {g.items.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.end}
+                          className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+                          onClick={closeSidebar}
+                        >
+                          <Icon size={17} />
+                          <span>{item.label}</span>
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Upgrade to Pro Card Widget (Matching Mockup) */}
+            <div style={{ padding: "14px 12px 6px" }}>
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(81, 70, 229, 0.22) 0%, rgba(99, 102, 241, 0.12) 100%)",
+                  border: "1px solid rgba(99, 102, 241, 0.28)",
+                  borderRadius: 14,
+                  padding: "16px 14px",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      background: "linear-gradient(135deg, #818CF8, #4F46E5)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 2px 8px rgba(79, 70, 229, 0.4)",
+                    }}
+                  >
+                    <Rocket size={14} color="#ffffff" />
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#ffffff" }}>
+                    Upgrade to Pro
+                  </div>
+                </div>
+                <p style={{ margin: "0 0 12px", fontSize: 11, color: "#94A3B8", lineHeight: 1.4 }}>
+                  Get advanced analytics and more features.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => nav("/reports")}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px",
+                    borderRadius: 8,
+                    background: "linear-gradient(135deg, #5146E5 0%, #6366F1 100%)",
+                    border: "none",
+                    color: "#ffffff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    boxShadow: "0 2px 8px rgba(81, 70, 229, 0.35)",
+                  }}
+                >
+                  <span>Upgrade Now</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
+          </nav>
+
+          {/* Sidebar Footer with User Profile */}
+          <div className="sidebar-footer">
+            {!isInstalled && (
+              <button
+                onClick={handleInstallClick}
+                className="sidebar-install-btn"
+                title="Install Oscar as App"
+              >
+                <Download size={15} />
+                <span>Install App</span>
+              </button>
+            )}
+
+            <div
+              className="sidebar-user"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 8px",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#ffffff",
+                    flexShrink: 0,
+                  }}
+                >
+                  {initials}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#ffffff",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {displayName}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#94A3B8" }}>
+                    {user?.role ?? "Admin"}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => void logout().then(() => nav("/login"))}
+                title="Sign out"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "rgba(255,255,255,0.5)",
+                  cursor: "pointer",
+                  padding: 6,
+                  borderRadius: 8,
+                  display: "flex",
+                  transition: "color 150ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#EF4444")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* ── Oscar Mobile Menu Screen Matching Reference Image ── */}
-      <div
-        className={`mobile-menu-screen ${sidebarOpen ? "open" : ""}`}
-        aria-label="Mobile Navigation"
-      >
-        {/* Header with Oscar branding and actions */}
-        <div className="m-menu-header">
-          <div className="m-menu-brand">
-            <div className="m-menu-brand-icon">
-              <ShoppingCart size={20} color="#FFFFFF" />
+      {isMobile && (
+        <div
+          className={`mobile-menu-screen ${sidebarOpen ? "open" : ""}`}
+          aria-label="Mobile Navigation"
+        >
+          {/* Header with Oscar branding and actions */}
+          <div className="m-menu-header">
+            <div className="m-menu-brand">
+              <div className="m-menu-brand-icon">
+                <ShoppingCart size={20} color="#FFFFFF" />
+              </div>
+              <div>
+                <h2 className="m-menu-brand-title">Oscar</h2>
+                <div className="m-menu-brand-sub">Inventory &amp; Billing</div>
+              </div>
             </div>
-            <div>
-              <h2 className="m-menu-brand-title">Oscar</h2>
-              <div className="m-menu-brand-sub">Inventory &amp; Billing</div>
+
+            <div className="m-menu-header-actions">
+              <button
+                type="button"
+                className="m-menu-icon-btn"
+                onClick={() => {
+                  closeSidebar();
+                  nav("/notifications");
+                }}
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                <Bell size={18} />
+                <span className="m-menu-badge-dot">3</span>
+              </button>
+              <button
+                type="button"
+                className="m-menu-icon-btn"
+                onClick={closeSidebar}
+                title="Close Menu"
+                aria-label="Close Menu"
+              >
+                <X size={18} />
+              </button>
             </div>
           </div>
 
-          <div className="m-menu-header-actions">
-            <button
-              type="button"
-              className="m-menu-icon-btn"
+          <div className="m-menu-body">
+            {/* Profile / Business Information Card */}
+            <div
+              className="m-business-card"
               onClick={() => {
                 closeSidebar();
-                nav("/notifications");
+                nav("/settings");
               }}
-              title="Notifications"
-              aria-label="Notifications"
+              title="Organization Settings"
             >
-              <Bell size={18} />
-              <span className="m-menu-badge-dot">3</span>
-            </button>
-            <button
-              type="button"
-              className="m-menu-icon-btn"
-              onClick={closeSidebar}
-              title="Close Menu"
-              aria-label="Close Menu"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="m-menu-body">
-          {/* Profile / Business Information Card */}
-          <div
-            className="m-business-card"
-            onClick={() => {
-              closeSidebar();
-              nav("/settings");
-            }}
-            title="Organization Settings"
-          >
-            <div className="m-business-icon-tile">
-              <Store size={22} />
-            </div>
-            <div className="m-business-info">
-              <div className="m-business-name-row">
-                <span className="m-business-name">{user?.organization?.name || "ABC Traders"}</span>
-                <BadgeCheck size={16} color="#0284C7" />
+              <div className="m-business-icon-tile">
+                <Store size={22} />
               </div>
-              <div className="m-business-sub">
-                GST: {(user?.organization as any)?.gstin || "33ABCDE1234F1Z5"}
-              </div>
-            </div>
-            <div className="m-business-right">
-              <span className="m-role-pill">
-                👑 {user?.role || "Admin"}
-              </span>
-              <ChevronRight size={16} className="m-menu-arrow" />
-            </div>
-          </div>
-
-          {/* Primary Menu Items matching reference image */}
-          {mobilePrimaryMenu.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
-                onClick={closeSidebar}
-              >
-                <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
-                  <Icon size={19} />
+              <div className="m-business-info">
+                <div className="m-business-name-row">
+                  <span className="m-business-name">{user?.organization?.name || "ABC Traders"}</span>
+                  <BadgeCheck size={16} color="#0284C7" />
                 </div>
-                <span className="m-menu-label">{item.label}</span>
+                <div className="m-business-sub">
+                  GST: {(user?.organization as any)?.gstin || "33ABCDE1234F1Z5"}
+                </div>
+              </div>
+              <div className="m-business-right">
+                <span className="m-role-pill">
+                  👑 {user?.role || "Admin"}
+                </span>
                 <ChevronRight size={16} className="m-menu-arrow" />
-              </NavLink>
-            );
-          })}
-
-          {/* Expand / Collapse Button for More Operations */}
-          <button
-            type="button"
-            className="m-menu-more-btn"
-            onClick={() => setMobileMoreOpen((p) => !p)}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Sparkles size={16} />
-              <span>{mobileMoreOpen ? "Hide Extra Modules" : "More Operations (8 Modules)"}</span>
+              </div>
             </div>
-            <ChevronDown
-              size={16}
-              style={{
-                transform: mobileMoreOpen ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 180ms ease",
-              }}
-            />
-          </button>
 
-          {/* Extra Modules List */}
-          {mobileMoreOpen &&
-            mobileExtraMenu.map((item) => {
+            {/* Primary Menu Items matching reference image */}
+            {mobilePrimaryMenu.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.end}
                   className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
                   onClick={closeSidebar}
                 >
                   <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
-                    <Icon size={18} />
+                    <Icon size={19} />
                   </div>
                   <span className="m-menu-label">{item.label}</span>
                   <ChevronRight size={16} className="m-menu-arrow" />
@@ -676,23 +642,63 @@ export function AppShell() {
               );
             })}
 
-          {/* Separate Logout Card */}
-          <div
-            className="m-logout-card"
-            onClick={() => {
-              closeSidebar();
-              void logout().then(() => nav("/login"));
-            }}
-            title="Sign Out"
-          >
-            <div className="m-logout-icon-tile">
-              <LogOut size={18} />
+            {/* Expand / Collapse Button for More Operations */}
+            <button
+              type="button"
+              className="m-menu-more-btn"
+              onClick={() => setMobileMoreOpen((p) => !p)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Sparkles size={16} />
+                <span>{mobileMoreOpen ? "Hide Extra Modules" : "More Operations (8 Modules)"}</span>
+              </div>
+              <ChevronDown
+                size={16}
+                style={{
+                  transform: mobileMoreOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 180ms ease",
+                }}
+              />
+            </button>
+
+            {/* Extra Modules List */}
+            {mobileMoreOpen &&
+              mobileExtraMenu.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
+                    onClick={closeSidebar}
+                  >
+                    <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
+                      <Icon size={18} />
+                    </div>
+                    <span className="m-menu-label">{item.label}</span>
+                    <ChevronRight size={16} className="m-menu-arrow" />
+                  </NavLink>
+                );
+              })}
+
+            {/* Separate Logout Card */}
+            <div
+              className="m-logout-card"
+              onClick={() => {
+                closeSidebar();
+                void logout().then(() => nav("/login"));
+              }}
+              title="Sign Out"
+            >
+              <div className="m-logout-icon-tile">
+                <LogOut size={18} />
+              </div>
+              <span className="m-logout-label">Logout</span>
+              <ChevronRight size={16} style={{ color: "#F87171" }} />
             </div>
-            <span className="m-logout-label">Logout</span>
-            <ChevronRight size={16} style={{ color: "#F87171" }} />
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Main Workspace Content ── */}
       <div className="page-content">
