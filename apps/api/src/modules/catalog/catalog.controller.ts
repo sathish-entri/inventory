@@ -23,8 +23,8 @@ export class CatalogController {
 
   @Get("categories")
   @RequirePermissions("product:read")
-  listCategories(@CurrentUser() user: AuthUser) {
-    return this.catalog.listCategories(user.organizationId);
+  listCategories(@CurrentUser() user: AuthUser, @Query() query?: PaginationQueryDto) {
+    return this.catalog.listCategories(user.organizationId, query);
   }
 
   @Post("brands")
@@ -35,8 +35,8 @@ export class CatalogController {
 
   @Get("brands")
   @RequirePermissions("product:read")
-  listBrands(@CurrentUser() user: AuthUser) {
-    return this.catalog.listBrands(user.organizationId);
+  listBrands(@CurrentUser() user: AuthUser, @Query() query?: PaginationQueryDto) {
+    return this.catalog.listBrands(user.organizationId, query);
   }
 
   @Post("units")
@@ -47,8 +47,8 @@ export class CatalogController {
 
   @Get("units")
   @RequirePermissions("product:read")
-  listUnits(@CurrentUser() user: AuthUser) {
-    return this.catalog.listUnits(user.organizationId);
+  listUnits(@CurrentUser() user: AuthUser, @Query() query?: PaginationQueryDto) {
+    return this.catalog.listUnits(user.organizationId, query);
   }
 
   @Post("warehouses")
@@ -59,8 +59,8 @@ export class CatalogController {
 
   @Get("warehouses")
   @RequirePermissions("warehouse:read")
-  listWarehouses(@CurrentUser() user: AuthUser) {
-    return this.catalog.listWarehouses(user.organizationId);
+  listWarehouses(@CurrentUser() user: AuthUser, @Query() query?: PaginationQueryDto) {
+    return this.catalog.listWarehouses(user.organizationId, query);
   }
 
   @Get("warehouses/:id")

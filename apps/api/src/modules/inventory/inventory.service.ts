@@ -6,6 +6,8 @@ import {
 } from "@nestjs/common";
 import { InventoryTxnType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { paginateMeta } from "../../common/pagination";
+import { InventoryQueryDto, ProductionRunQueryDto } from "./dto";
 import {
   applyDecrease,
   applyIncrease,
@@ -102,6 +104,86 @@ export class InventoryService {
         reservedQuantity: Number(r.reservedQuantity),
         availableQuantity: availableQuantity(Number(r.quantity), Number(r.reservedQuantity)),
       }));
+  }
+
+  async listStockPaginated(organizationId: string, query: InventoryQueryDto = {} as any) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {
+      organizationId,
+      warehouseId: { not: "" },
+    };
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.productId) where.productId = query.productId;
+    if (query.classification) {
+      where.product = { classification: query.classification };
+    }
+
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { product: { name: { contains: s, mode: "insensitive" } } },
+        { product: { sku: { contains: s, mode: "insensitive" } } },
+        { warehouse: { name: { contains: s, mode: "insensitive" } } },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.inventoryStock.findMany({
+        where,
+        select: {
+          id: true,
+          organizationId: true,
+          productId: true,
+          warehouseId: true,
+          quantity: true,
+          reservedQuantity: true,
+          updatedAt: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              type: true,
+              classification: true,
+              reorderLevel: true,
+              sellingPrice: true,
+              costPrice: true,
+              unit: {
+                select: {
+                  name: true,
+                  abbreviation: true,
+                },
+              },
+            },
+          },
+          warehouse: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.inventoryStock.count({ where }),
+    ]);
+
+    const data = rows
+      .filter((r: any) => r.warehouse && r.product)
+      .map((r: any) => ({
+        ...r,
+        quantity: Number(r.quantity),
+        reservedQuantity: Number(r.reservedQuantity),
+        availableQuantity: availableQuantity(Number(r.quantity), Number(r.reservedQuantity)),
+      }));
+
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   private snapshot(row: { quantity: Prisma.Decimal; reservedQuantity: Prisma.Decimal }): StockSnapshot {
@@ -688,12 +770,27 @@ export class InventoryService {
     });
   }
 
-  async listProductionRuns(organizationId: string, page = 1, pageSize = 20) {
+  async listProductionRuns(organizationId: string, query: ProductionRunQueryDto = {} as any) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    const [total, data] = await this.prisma.$transaction([
-      this.prisma.productionRun.count({ where: { organizationId } }),
+
+    const where: any = { organizationId };
+    if (query.status) where.status = query.status;
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { runNumber: { contains: s, mode: "insensitive" } },
+        { product: { name: { contains: s, mode: "insensitive" } } },
+        { product: { sku: { contains: s, mode: "insensitive" } } },
+      ];
+    }
+
+    const [total, data] = await Promise.all([
+      this.prisma.productionRun.count({ where }),
       this.prisma.productionRun.findMany({
-        where: { organizationId },
+        where,
         include: {
           product: {
             select: { id: true, name: true, sku: true, unit: true },
@@ -707,7 +804,7 @@ export class InventoryService {
         take: pageSize,
       }),
     ]);
-    return { data, meta: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async getProductionFeasibility(organizationId: string, productId: string, warehouseId?: string) {

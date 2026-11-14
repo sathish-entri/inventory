@@ -8,6 +8,8 @@ import { CurrentUser, type AuthUser } from "../../common/current-user.decorator"
 import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
 import { AdjustStockDto, CreateBatchDto, CreateSerialDto, OpeningStockDto, TransferDto, ProduceGoodsDto, DailyProductionLogDto } from "../catalog/dto";
+import { paginateMeta, PaginationQueryDto } from "../../common/pagination";
+import { AdjustmentQueryDto, InventoryQueryDto, LedgerQueryDto, ProductionRunQueryDto, TransferQueryDto } from "./dto";
 
 @ApiTags("inventory")
 @ApiBearerAuth()
@@ -24,10 +26,9 @@ export class InventoryController {
   @RequirePermissions("inventory:read")
   list(
     @CurrentUser() user: AuthUser,
-    @Query("warehouseId") warehouseId?: string,
-    @Query("productId") productId?: string,
+    @Query() query: InventoryQueryDto,
   ) {
-    return this.inventory.listStock(user.organizationId, warehouseId, productId);
+    return this.inventory.listStockPaginated(user.organizationId, query);
   }
 
   @Post("inventory/opening-stock")
@@ -71,15 +72,29 @@ export class InventoryController {
 
   @Get("inventory/adjustments")
   @RequirePermissions("inventory:read")
-  listAdjustments(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    const p = Number(page) || 1;
-    const ps = Number(pageSize) || 50;
-    return this.prisma.stockAdjustment.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: { createdAt: "desc" },
-      skip: (p - 1) * ps,
-      take: ps,
-    });
+  async listAdjustments(@CurrentUser() user: AuthUser, @Query() query: AdjustmentQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.productId) where.productId = query.productId;
+    if (query.search?.trim()) {
+      where.OR = [
+        { reason: { contains: query.search.trim(), mode: "insensitive" } },
+        { notes: { contains: query.search.trim(), mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.stockAdjustment.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.stockAdjustment.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Post("inventory/transfers")
@@ -96,35 +111,67 @@ export class InventoryController {
 
   @Get("inventory/transfers")
   @RequirePermissions("inventory:read")
-  listTransfers(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    const p = Number(page) || 1;
-    const ps = Number(pageSize) || 50;
-    return this.prisma.stockTransfer.findMany({
-      where: { organizationId: user.organizationId },
-      select: {
-        id: true,
-        number: true,
-        fromWarehouseId: true,
-        toWarehouseId: true,
-        status: true,
-        createdAt: true,
-        lines: { select: { id: true, productId: true, quantity: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      skip: (p - 1) * ps,
-      take: ps,
-    });
+  async listTransfers(@CurrentUser() user: AuthUser, @Query() query: TransferQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.status) where.status = query.status;
+    if (query.fromWarehouseId) where.fromWarehouseId = query.fromWarehouseId;
+    if (query.toWarehouseId) where.toWarehouseId = query.toWarehouseId;
+    if (query.search?.trim()) {
+      where.number = { contains: query.search.trim(), mode: "insensitive" };
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.stockTransfer.findMany({
+        where,
+        select: {
+          id: true,
+          number: true,
+          fromWarehouseId: true,
+          toWarehouseId: true,
+          status: true,
+          createdAt: true,
+          lines: { select: { id: true, productId: true, quantity: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.stockTransfer.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Get("inventory/ledger")
   @RequirePermissions("inventory:read")
-  ledger(@CurrentUser() user: AuthUser) {
-    return this.prisma.inventoryTransaction.findMany({
-      where: { organizationId: user.organizationId },
-      include: { product: true, warehouse: true },
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    });
+  async ledger(@CurrentUser() user: AuthUser, @Query() query: LedgerQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.productId) where.productId = query.productId;
+    if (query.type) where.type = query.type;
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { product: { name: { contains: s, mode: "insensitive" } } },
+        { product: { sku: { contains: s, mode: "insensitive" } } },
+        { referenceId: { contains: s, mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.inventoryTransaction.findMany({
+        where,
+        include: { product: true, warehouse: true },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.inventoryTransaction.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Post("inventory/batches")
@@ -158,11 +205,28 @@ export class InventoryController {
 
   @Get("inventory/batches")
   @RequirePermissions("inventory:read")
-  listBatches(@CurrentUser() user: AuthUser) {
-    return this.prisma.batch.findMany({
-      where: { organizationId: user.organizationId },
-      include: { product: true, stocks: { include: { warehouse: true } } },
-    });
+  async listBatches(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.search?.trim()) {
+      where.OR = [
+        { batchNumber: { contains: query.search.trim(), mode: "insensitive" } },
+        { product: { name: { contains: query.search.trim(), mode: "insensitive" } } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.batch.findMany({
+        where,
+        include: { product: true, stocks: { include: { warehouse: true } } },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.batch.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Post("inventory/serials")
@@ -181,11 +245,27 @@ export class InventoryController {
 
   @Get("inventory/serials")
   @RequirePermissions("inventory:read")
-  listSerials(@CurrentUser() user: AuthUser) {
-    return this.prisma.serialNumber.findMany({
-      where: { organizationId: user.organizationId },
-      include: { product: true },
-    });
+  async listSerials(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.search?.trim()) {
+      where.OR = [
+        { serial: { contains: query.search.trim(), mode: "insensitive" } },
+        { product: { name: { contains: query.search.trim(), mode: "insensitive" } } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.serialNumber.findMany({
+        where,
+        include: { product: true },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.serialNumber.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Get("inventory/reorder")
@@ -205,12 +285,9 @@ export class InventoryController {
   @RequirePermissions("inventory:read")
   listProductionRuns(
     @CurrentUser() user: AuthUser,
-    @Query("page") page?: string,
-    @Query("pageSize") pageSize?: string,
+    @Query() query: ProductionRunQueryDto,
   ) {
-    const p = Number(page) || 1;
-    const ps = Math.min(100, Math.max(1, Number(pageSize) || 20));
-    return this.inventory.listProductionRuns(user.organizationId, p, ps);
+    return this.inventory.listProductionRuns(user.organizationId, query);
   }
 
   @Get("inventory/production-feasibility/:productId")

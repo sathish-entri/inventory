@@ -26,17 +26,53 @@ export class CatalogService {
     }
   }
 
-  listCategories(organizationId: string) {
-    return this.prisma.category.findMany({ where: this.org(organizationId), orderBy: { name: "asc" } });
+  async listCategories(organizationId: string, query?: PaginationQueryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query?.pageSize) || 100));
+    const skip = (page - 1) * pageSize;
+    const where: any = this.org(organizationId);
+    if (query?.search?.trim()) {
+      where.name = { contains: query.search.trim(), mode: "insensitive" };
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.category.findMany({ where, skip, take: pageSize, orderBy: { name: "asc" } }),
+      this.prisma.category.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
-  listBrands(organizationId: string) {
-    return this.prisma.brand.findMany({ where: this.org(organizationId), orderBy: { name: "asc" } });
+
+  async listBrands(organizationId: string, query?: PaginationQueryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query?.pageSize) || 100));
+    const skip = (page - 1) * pageSize;
+    const where: any = this.org(organizationId);
+    if (query?.search?.trim()) {
+      where.name = { contains: query.search.trim(), mode: "insensitive" };
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.brand.findMany({ where, skip, take: pageSize, orderBy: { name: "asc" } }),
+      this.prisma.brand.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
+
   createUnit(organizationId: string, dto: UnitDto) {
     return this.prisma.unit.create({ data: { organizationId, ...dto } });
   }
-  listUnits(organizationId: string) {
-    return this.prisma.unit.findMany({ where: this.org(organizationId) });
+
+  async listUnits(organizationId: string, query?: PaginationQueryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query?.pageSize) || 100));
+    const skip = (page - 1) * pageSize;
+    const where: any = this.org(organizationId);
+    if (query?.search?.trim()) {
+      where.name = { contains: query.search.trim(), mode: "insensitive" };
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.unit.findMany({ where, skip, take: pageSize }),
+      this.prisma.unit.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async createWarehouse(organizationId: string, dto: CreateWarehouseDto) {
@@ -50,8 +86,29 @@ export class CatalogService {
     }
   }
 
-  listWarehouses(organizationId: string) {
-    return this.prisma.warehouse.findMany({ where: this.org(organizationId), orderBy: { name: "asc" } });
+  async listWarehouses(organizationId: string, query?: PaginationQueryDto) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query?.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = this.org(organizationId);
+    if (query?.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { name: { contains: s, mode: "insensitive" } },
+        { code: { contains: s, mode: "insensitive" } },
+        { city: { contains: s, mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.warehouse.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { name: "asc" },
+      }),
+      this.prisma.warehouse.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async getWarehouse(organizationId: string, id: string) {
@@ -293,7 +350,7 @@ export class CatalogService {
     return this.prisma.customer.create({ data: { ...data, organizationId } });
   }
   listCustomers(organizationId: string, query: PaginationQueryDto) {
-    return this.page(this.prisma.customer, organizationId, query, "name");
+    return this.page(this.prisma.customer, organizationId, query, ["name", "email", "phone", "gstin", "city"]);
   }
   async updateCustomer(organizationId: string, id: string, data: any) {
     const exists = await this.prisma.customer.findFirst({ where: { id, organizationId } });
@@ -304,7 +361,7 @@ export class CatalogService {
     return this.prisma.vendor.create({ data: { ...data, organizationId } });
   }
   listVendors(organizationId: string, query: PaginationQueryDto) {
-    return this.page(this.prisma.vendor, organizationId, query, "name");
+    return this.page(this.prisma.vendor, organizationId, query, ["name", "email", "phone", "gstin", "city"]);
   }
   async updateVendor(organizationId: string, id: string, data: any) {
     const exists = await this.prisma.vendor.findFirst({ where: { id, organizationId } });
@@ -388,19 +445,28 @@ export class CatalogService {
     model: { count: Function; findMany: Function },
     organizationId: string,
     query: PaginationQueryDto,
-    searchField: string,
+    searchField: string | string[],
   ) {
-    const where = {
-      organizationId,
-      ...(query.search ? { [searchField]: { contains: query.search, mode: "insensitive" } } : {}),
-    };
-    const total = await model.count({ where });
-    const data = await model.findMany({
-      where,
-      skip: (query.page - 1) * query.pageSize,
-      take: query.pageSize,
-      orderBy: { createdAt: "desc" },
-    });
-    return { data, meta: paginateMeta(query.page, query.pageSize, total) };
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
+    const skip = (page - 1) * pageSize;
+
+    const where: any = { organizationId };
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      const fields = Array.isArray(searchField) ? searchField : [searchField];
+      where.OR = fields.map((f) => ({ [f]: { contains: s, mode: "insensitive" } }));
+    }
+
+    const [total, data] = await Promise.all([
+      model.count({ where }),
+      model.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 }

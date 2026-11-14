@@ -4,6 +4,8 @@ import { InventoryService } from "../inventory/inventory.service";
 import { SequenceService } from "../../common/sequence.service";
 import { documentTotals, round2 } from "../inventory/inventory.math";
 import { CreatePurchaseOrderDto, ReceiveDto, ReturnDto } from "../catalog/dto";
+import { paginateMeta } from "../../common/pagination";
+import { BillQueryDto, PurchaseOrderQueryDto, PurchaseReceiveQueryDto, PurchaseReturnQueryDto } from "./dto";
 
 @Injectable()
 export class PurchasesService {
@@ -73,20 +75,42 @@ export class PurchasesService {
     });
   }
 
-  listPurchaseOrders(orgId: string, page = 1, pageSize = 20) {
+  async listPurchaseOrders(orgId: string, query: PurchaseOrderQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    return this.prisma.purchaseOrder.findMany({
-      where: { organizationId: orgId },
-      select: {
-        id: true, number: true, status: true, date: true, expectedDate: true,
-        subtotal: true, tax: true, total: true, notes: true, warehouseId: true,
-        vendor: { select: { id: true, name: true, email: true, phone: true } },
-        lines: { select: { id: true, productId: true, quantity: true, receivedQty: true, unitCost: true, taxRate: true, amount: true } },
-      },
-      skip,
-      take: pageSize,
-      orderBy: { date: "desc" },
-    });
+
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.vendorId) where.vendorId = query.vendorId;
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { vendor: { name: { contains: s, mode: "insensitive" } } },
+        { notes: { contains: s, mode: "insensitive" } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.purchaseOrder.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, date: true, expectedDate: true,
+          subtotal: true, tax: true, total: true, notes: true, warehouseId: true,
+          vendor: { select: { id: true, name: true, email: true, phone: true } },
+          lines: { select: { id: true, productId: true, quantity: true, receivedQty: true, unitCost: true, taxRate: true, amount: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { date: "desc" },
+      }),
+      this.prisma.purchaseOrder.count({ where }),
+    ]);
+
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async getPO(orgId: string, id: string) {
@@ -248,19 +272,39 @@ export class PurchasesService {
     return receive;
   }
 
-  listReceives(orgId: string, page = 1, pageSize = 20) {
+  async listReceives(orgId: string, query: PurchaseReceiveQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    return this.prisma.purchaseReceive.findMany({
-      where: { organizationId: orgId },
-      select: {
-        id: true, number: true, receivedAt: true, purchaseOrderId: true,
-        purchaseOrder: { select: { id: true, number: true, vendor: { select: { id: true, name: true } } } },
-        lines: { select: { id: true, productId: true, quantity: true, batchNumber: true } },
-      },
-      skip,
-      take: pageSize,
-      orderBy: { receivedAt: "desc" },
-    });
+
+    const where: any = { organizationId: orgId };
+    if (query.purchaseOrderId) where.purchaseOrderId = query.purchaseOrderId;
+
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { purchaseOrder: { number: { contains: s, mode: "insensitive" } } },
+        { purchaseOrder: { vendor: { name: { contains: s, mode: "insensitive" } } } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.purchaseReceive.findMany({
+        where,
+        select: {
+          id: true, number: true, receivedAt: true, purchaseOrderId: true,
+          purchaseOrder: { select: { id: true, number: true, vendor: { select: { id: true, name: true } } } },
+          lines: { select: { id: true, productId: true, quantity: true, batchNumber: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { receivedAt: "desc" },
+      }),
+      this.prisma.purchaseReceive.count({ where }),
+    ]);
+
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async createBillFromPO(orgId: string, purchaseOrderId: string, customNumber?: string) {
@@ -305,22 +349,40 @@ export class PurchasesService {
     });
   }
 
-  listBills(orgId: string, page = 1, pageSize = 20, status?: string) {
+  async listBills(orgId: string, query: BillQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
+
     const where: any = { organizationId: orgId };
-    if (status) where.status = status;
-    return this.prisma.bill.findMany({
-      where,
-      select: {
-        id: true, number: true, status: true, date: true, dueDate: true,
-        total: true, amountPaid: true, vendorId: true, purchaseOrderId: true,
-        vendor: { select: { id: true, name: true, email: true, phone: true } },
-        lines: { select: { id: true, productId: true, description: true, quantity: true, unitCost: true, amount: true } },
-      },
-      skip,
-      take: pageSize,
-      orderBy: { date: "desc" },
-    });
+    if (query.status) where.status = query.status;
+    if (query.vendorId) where.vendorId = query.vendorId;
+
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { vendor: { name: { contains: s, mode: "insensitive" } } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.bill.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, date: true, dueDate: true,
+          total: true, amountPaid: true, vendorId: true, purchaseOrderId: true,
+          vendor: { select: { id: true, name: true, email: true, phone: true } },
+          lines: { select: { id: true, productId: true, description: true, quantity: true, unitCost: true, amount: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { date: "desc" },
+      }),
+      this.prisma.bill.count({ where }),
+    ]);
+
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async payBill(orgId: string, billId: string, vendorId: string, amount: number, method: string) {
@@ -386,19 +448,40 @@ export class PurchasesService {
     });
   }
 
-  listPurchaseReturns(orgId: string, page = 1, pageSize = 20) {
+  async listPurchaseReturns(orgId: string, query: PurchaseReturnQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    return this.prisma.purchaseReturn.findMany({
-      where: { organizationId: orgId },
-      select: {
-        id: true, number: true, status: true, reason: true, createdAt: true,
-        vendor: { select: { id: true, name: true } },
-        lines: { select: { id: true, productId: true, quantity: true } },
-      },
-      skip,
-      take: pageSize,
-      orderBy: { createdAt: "desc" },
-    });
+
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.vendorId) where.vendorId = query.vendorId;
+
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { vendor: { name: { contains: s, mode: "insensitive" } } },
+        { reason: { contains: s, mode: "insensitive" } },
+      ];
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.purchaseReturn.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, reason: true, createdAt: true,
+          vendor: { select: { id: true, name: true } },
+          lines: { select: { id: true, productId: true, quantity: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.purchaseReturn.count({ where }),
+    ]);
+
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   async getVendorPurchaseHistory(orgId: string, vendorId: string) {

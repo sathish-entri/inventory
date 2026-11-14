@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
@@ -18,6 +19,7 @@ import { CurrentUser, type AuthUser } from "../../common/current-user.decorator"
 import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
 import { InviteUserDto } from "../catalog/dto";
+import { paginateMeta, PaginationQueryDto } from "../../common/pagination";
 
 @ApiTags("admin")
 @ApiBearerAuth()
@@ -43,19 +45,38 @@ export class AdminController {
 
   @Get("users")
   @RequirePermissions("user:read")
-  users(@CurrentUser() user: AuthUser) {
-    return this.prisma.user.findMany({
-      where: { organizationId: user.organizationId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        isActive: true,
-        emailVerifiedAt: true,
-        roles: { include: { role: true } },
-      },
-    });
+  async users(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { firstName: { contains: s, mode: "insensitive" } },
+        { lastName: { contains: s, mode: "insensitive" } },
+        { email: { contains: s, mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          isActive: true,
+          emailVerifiedAt: true,
+          roles: { include: { role: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Post("users")
@@ -123,22 +144,55 @@ export class AdminController {
 
   @Get("audit-logs")
   @RequirePermissions("audit:read")
-  audit(@CurrentUser() user: AuthUser) {
-    return this.prisma.auditLog.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
+  async audit(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { action: { contains: s, mode: "insensitive" } },
+        { resourceType: { contains: s, mode: "insensitive" } },
+        { resourceId: { contains: s, mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Get("notifications")
   @RequirePermissions("notification:read")
-  notifications(@CurrentUser() user: AuthUser) {
-    return this.prisma.notification.findMany({
-      where: { organizationId: user.organizationId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+  async notifications(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 50));
+    const skip = (page - 1) * pageSize;
+    const where: any = { organizationId: user.organizationId };
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { title: { contains: s, mode: "insensitive" } },
+        { body: { contains: s, mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.notification.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   @Post("notifications/:id/read")

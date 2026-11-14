@@ -12,6 +12,15 @@ import {
 import { SHIPPING_PROVIDER, PAYMENT_PROVIDER, EMAIL_PROVIDER, type ShippingProvider, type PaymentProvider, type EmailProvider } from "../integrations/providers";
 import { Inject } from "@nestjs/common";
 import { paginateMeta } from "../../common/pagination";
+import {
+  EstimateQueryDto,
+  InvoiceQueryDto,
+  PackageQueryDto,
+  PaymentQueryDto,
+  SalesOrderQueryDto,
+  SalesReturnQueryDto,
+  ShipmentQueryDto,
+} from "./dto";
 
 @Injectable()
 export class SalesService {
@@ -843,11 +852,22 @@ export class SalesService {
     });
   }
 
-  async listPackages(orgId: string, query: { page?: number; pageSize?: number } = {}) {
-    const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+  async listPackages(orgId: string, query: PackageQueryDto = {} as any) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    const where = { organizationId: orgId };
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.warehouseId) where.warehouseId = query.warehouseId;
+    if (query.salesOrderId) where.salesOrderId = query.salesOrderId;
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { salesOrder: { number: { contains: s, mode: "insensitive" } } },
+        { salesOrder: { customer: { name: { contains: s, mode: "insensitive" } } } },
+      ];
+    }
     const [data, total] = await Promise.all([
       this.prisma.package.findMany({
         where,
@@ -943,11 +963,23 @@ export class SalesService {
     return this.prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id }, include: { lines: true } });
   }
 
-  async listShipments(orgId: string, query: { page?: number; pageSize?: number } = {}) {
-    const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+  async listShipments(orgId: string, query: ShipmentQueryDto = {} as any) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    const where = { organizationId: orgId };
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status;
+    if (query.carrier) where.carrier = query.carrier;
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { carrier: { contains: s, mode: "insensitive" } },
+        { trackingNumber: { contains: s, mode: "insensitive" } },
+        { salesOrder: { number: { contains: s, mode: "insensitive" } } },
+        { salesOrder: { customer: { name: { contains: s, mode: "insensitive" } } } },
+      ];
+    }
     const [data, total] = await Promise.all([
       this.prisma.shipment.findMany({
         where,
@@ -1114,11 +1146,22 @@ export class SalesService {
     });
   }
 
-  async listPayments(orgId: string, query: { page?: number; pageSize?: number } = {}) {
-    const page = Math.max(1, query.page ?? 1);
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+  async listPayments(orgId: string, query: PaymentQueryDto = {} as any) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    const where = { organizationId: orgId };
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status as any;
+    if (query.customerId) where.customerId = query.customerId;
+    if (query.method) where.method = query.method;
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { customer: { name: { contains: s, mode: "insensitive" } } },
+        { method: { contains: s, mode: "insensitive" } },
+        { providerRef: { contains: s, mode: "insensitive" } },
+      ];
+    }
     const [data, total] = await Promise.all([
       this.prisma.payment.findMany({
         where,
@@ -1184,19 +1227,36 @@ export class SalesService {
     });
   }
 
-  listSalesReturns(orgId: string, page = 1, pageSize = 20) {
+  async listSalesReturns(orgId: string, query: SalesReturnQueryDto = {} as any) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const pageSize = Math.min(500, Math.max(1, Number(query.pageSize) || 20));
     const skip = (page - 1) * pageSize;
-    return this.prisma.salesReturn.findMany({
-      where: { organizationId: orgId },
-      select: {
-        id: true, number: true, status: true, reason: true, createdAt: true,
-        customer: { select: { id: true, name: true } },
-        lines: { select: { id: true, productId: true, quantity: true } },
-      },
-      skip,
-      take: pageSize,
-      orderBy: { createdAt: "desc" },
-    });
+    const where: any = { organizationId: orgId };
+    if (query.status) where.status = query.status as any;
+    if (query.customerId) where.customerId = query.customerId;
+    if (query.search?.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { number: { contains: s, mode: "insensitive" } },
+        { customer: { name: { contains: s, mode: "insensitive" } } },
+        { reason: { contains: s, mode: "insensitive" } },
+      ];
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.salesReturn.findMany({
+        where,
+        select: {
+          id: true, number: true, status: true, reason: true, createdAt: true,
+          customer: { select: { id: true, name: true } },
+          lines: { select: { id: true, productId: true, quantity: true } },
+        },
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.salesReturn.count({ where }),
+    ]);
+    return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
   private async priceLines(

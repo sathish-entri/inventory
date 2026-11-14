@@ -7,6 +7,7 @@ import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
 import { CreatePurchaseOrderDto, ReceiveDto, ReturnDto } from "../catalog/dto";
 import { VendorPayDto } from "./vendor-pay.dto";
+import { BillQueryDto, PurchaseOrderQueryDto, PurchaseReceiveQueryDto, PurchaseReturnQueryDto } from "./dto";
 
 @ApiTags("purchases")
 @ApiBearerAuth()
@@ -23,8 +24,8 @@ export class PurchasesController {
 
   @Get("purchase-orders")
   @RequirePermissions("purchase_order:read")
-  list(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.purchases.listPurchaseOrders(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
+  list(@CurrentUser() user: AuthUser, @Query() query: PurchaseOrderQueryDto) {
+    return this.purchases.listPurchaseOrders(user.organizationId, query);
   }
 
   @Delete("purchase-orders/:id")
@@ -41,8 +42,8 @@ export class PurchasesController {
 
   @Get("purchase-receives")
   @RequirePermissions("purchase_receive:read")
-  receives(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.purchases.listReceives(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
+  receives(@CurrentUser() user: AuthUser, @Query() query: PurchaseReceiveQueryDto) {
+    return this.purchases.listReceives(user.organizationId, query);
   }
 
   @Post("bills/from-order/:purchaseOrderId")
@@ -53,8 +54,8 @@ export class PurchasesController {
 
   @Get("bills")
   @RequirePermissions("bill:read")
-  bills(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string, @Query("status") status?: string) {
-    return this.purchases.listBills(user.organizationId, Number(page) || 1, Number(pageSize) || 50, status);
+  bills(@CurrentUser() user: AuthUser, @Query() query: BillQueryDto) {
+    return this.purchases.listBills(user.organizationId, query);
   }
 
   @Post("bills/:id/pay")
@@ -71,8 +72,8 @@ export class PurchasesController {
 
   @Get("purchase-returns")
   @RequirePermissions("return:read")
-  listReturns(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.purchases.listPurchaseReturns(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
+  listReturns(@CurrentUser() user: AuthUser, @Query() query: PurchaseReturnQueryDto) {
+    return this.purchases.listPurchaseReturns(user.organizationId, query);
   }
 
   @Get("vendors/:id/purchase-history")

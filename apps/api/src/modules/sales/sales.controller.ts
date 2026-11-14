@@ -6,11 +6,20 @@ import { CurrentUser, type AuthUser } from "../../common/current-user.decorator"
 import { RequirePermissions } from "../../common/permissions.decorator";
 import { PermissionsGuard } from "../../common/permissions.guard";
 import { CreateEstimateDto, CreateSalesOrderDto, PackageDto, PaymentDto, ReturnDto } from "../catalog/dto";
+import {
+  EstimateQueryDto,
+  InvoiceQueryDto,
+  PackageQueryDto,
+  PaymentQueryDto,
+  SalesOrderQueryDto,
+  SalesReturnQueryDto,
+  ShipmentQueryDto,
+} from "./dto";
 
 @ApiTags("sales")
 @ApiBearerAuth()
 @UseGuards(AuthGuard("jwt"), PermissionsGuard)
-@Controller() 
+@Controller()
 export class SalesController {
   constructor(private readonly sales: SalesService) {}
 
@@ -22,8 +31,8 @@ export class SalesController {
 
   @Get("estimates")
   @RequirePermissions("estimate:read")
-  listEstimates(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.sales.listEstimates(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
+  listEstimates(@CurrentUser() user: AuthUser, @Query() query: EstimateQueryDto) {
+    return this.sales.listEstimates(user.organizationId, query);
   }
 
   @Post("estimates/:id/send-email")
@@ -52,8 +61,8 @@ export class SalesController {
 
   @Get("sales-orders")
   @RequirePermissions("sales_order:read")
-  listSO(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string, @Query("status") status?: string) {
-    return this.sales.listSalesOrders(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50, status });
+  listSO(@CurrentUser() user: AuthUser, @Query() query: SalesOrderQueryDto) {
+    return this.sales.listSalesOrders(user.organizationId, query);
   }
 
   @Get("sales-orders/:id")
@@ -88,8 +97,8 @@ export class SalesController {
 
   @Get("packages")
   @RequirePermissions("package:read")
-  packages(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.sales.listPackages(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
+  packages(@CurrentUser() user: AuthUser, @Query() query: PackageQueryDto) {
+    return this.sales.listPackages(user.organizationId, query);
   }
 
   @Post("shipments/from-package/:packageId")
@@ -100,8 +109,8 @@ export class SalesController {
 
   @Get("shipments")
   @RequirePermissions("shipment:read")
-  shipments(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.sales.listShipments(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
+  shipments(@CurrentUser() user: AuthUser, @Query() query: ShipmentQueryDto) {
+    return this.sales.listShipments(user.organizationId, query);
   }
 
   @Post("invoices/from-order/:salesOrderId")
@@ -112,8 +121,8 @@ export class SalesController {
 
   @Get("invoices")
   @RequirePermissions("invoice:read")
-  invoices(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string, @Query("status") status?: string) {
-    return this.sales.listInvoices(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50, status });
+  invoices(@CurrentUser() user: AuthUser, @Query() query: InvoiceQueryDto) {
+    return this.sales.listInvoices(user.organizationId, query);
   }
 
   @Post("payments")
@@ -124,8 +133,8 @@ export class SalesController {
 
   @Get("payments")
   @RequirePermissions("payment:read")
-  payments(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.sales.listPayments(user.organizationId, { page: Number(page) || 1, pageSize: Number(pageSize) || 50 });
+  payments(@CurrentUser() user: AuthUser, @Query() query: PaymentQueryDto) {
+    return this.sales.listPayments(user.organizationId, query);
   }
 
   @Post("sales-returns")
@@ -142,7 +151,7 @@ export class SalesController {
 
   @Get("sales-returns")
   @RequirePermissions("return:read")
-  listReturns(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
-    return this.sales.listSalesReturns(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
+  listReturns(@CurrentUser() user: AuthUser, @Query() query: SalesReturnQueryDto) {
+    return this.sales.listSalesReturns(user.organizationId, query);
   }
 }

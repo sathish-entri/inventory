@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
 import { Type } from "class-transformer";
 
 export class PaginationQueryDto {
@@ -12,11 +12,20 @@ export class PaginationQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(500)
   pageSize = 20;
 
   @IsOptional()
+  @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsIn(["asc", "desc", "ASC", "DESC"])
+  sortOrder?: "asc" | "desc" | "ASC" | "DESC" = "desc";
 }
 
 export function paginateMeta(page: number, pageSize: number, total: number) {

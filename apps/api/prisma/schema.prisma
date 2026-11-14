@@ -168,6 +168,7 @@ model User {
   auditLogs    AuditLog[]
 
   @@unique([organizationId, email])
+  @@index([organizationId, createdAt])
   @@index([organizationId])
   @@index([email])
 }
@@ -327,6 +328,7 @@ model Product {
   @@unique([organizationId, sku])
   @@index([organizationId, barcode])
   @@index([organizationId, name])
+  @@index([organizationId, createdAt])
   @@index([organizationId])
 }
 
@@ -371,6 +373,8 @@ model Warehouse {
   productionRuns ProductionRun[]
 
   @@unique([organizationId, code])
+  @@index([organizationId, name])
+  @@index([organizationId, createdAt])
   @@index([organizationId])
 }
 
@@ -530,6 +534,8 @@ model Customer {
   salesReturns SalesReturn[]
 
   @@index([organizationId, name])
+  @@index([organizationId, phone])
+  @@index([organizationId, createdAt])
   @@index([organizationId])
 }
 
@@ -559,6 +565,8 @@ model Vendor {
   purchaseReturns PurchaseReturn[]
 
   @@index([organizationId, name])
+  @@index([organizationId, phone])
+  @@index([organizationId, createdAt])
   @@index([organizationId])
 }
 
@@ -583,6 +591,7 @@ model Estimate {
   @@unique([organizationId, number])
   @@index([organizationId, customerId])
   @@index([organizationId, status])
+  @@index([organizationId, date])
 }
 
 model EstimateLine {
@@ -624,7 +633,9 @@ model SalesOrder {
   salesReturns SalesReturn[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, customerId])
   @@index([organizationId, status])
+  @@index([organizationId, createdAt])
 }
 
 model SalesOrderLine {
@@ -727,7 +738,9 @@ model Invoice {
   payments     PaymentAllocation[]
 
   @@unique([organizationId, number])
+  @@index([organizationId, customerId])
   @@index([organizationId, status])
+  @@index([organizationId, createdAt])
 }
 
 model InvoiceLine {
@@ -759,6 +772,8 @@ model Payment {
   customer     Customer           @relation(fields: [customerId], references: [id])
   allocations  PaymentAllocation[]
 
+  @@index([organizationId, customerId])
+  @@index([organizationId, createdAt])
   @@index([organizationId, provider, providerRef])
 }
 
@@ -796,6 +811,7 @@ model PurchaseOrder {
   @@unique([organizationId, number])
   @@index([organizationId, status])
   @@index([organizationId, vendorId])
+  @@index([organizationId, date])
 }
 
 model PurchaseOrderLine {
@@ -825,6 +841,7 @@ model PurchaseReceive {
 
   @@unique([organizationId, number])
   @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, receivedAt])
 }
 
 model PurchaseReceiveLine {
@@ -859,6 +876,7 @@ model Bill {
   @@unique([organizationId, number])
   @@index([organizationId, status])
   @@index([organizationId, vendorId])
+  @@index([organizationId, date])
 }
 
 model BillLine {
@@ -915,6 +933,7 @@ model SalesReturn {
   @@unique([organizationId, number])
   @@index([organizationId, customerId])
   @@index([organizationId, status])
+  @@index([organizationId, createdAt])
 }
 
 model SalesReturnLine {
@@ -945,6 +964,7 @@ model PurchaseReturn {
   @@unique([organizationId, number])
   @@index([organizationId, status])
   @@index([organizationId, vendorId])
+  @@index([organizationId, createdAt])
 }
 
 model PurchaseReturnLine {
