@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth";
+import { ThemeProvider } from "./theme";
 import { AppShell } from "./shell";
 import {
   AdjustmentsPage,
@@ -123,11 +124,13 @@ function StyledRoutes() {
 export function App() {
   return (
     <QueryClientProvider client={client}>
-      <AuthProvider>
-        <BrowserRouter>
-          <StyledRoutes />
-        </BrowserRouter>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <StyledRoutes />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
