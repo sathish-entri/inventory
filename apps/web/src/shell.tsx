@@ -10,6 +10,7 @@ import {
   Bell, Settings, UserCog, ClipboardList, Plug, LogOut, Boxes,
   BarChart3, RefreshCw, Menu, X, ChevronDown, ChevronRight,
   Search, Sun, Moon, Rocket, ExternalLink, ShieldCheck, Sparkles,
+  Store, BadgeCheck, LayoutGrid,
 } from "lucide-react";
 
 // Primary quick-access navigation matching the Oscar SaaS design
@@ -82,6 +83,32 @@ const allModules = [
   },
 ];
 
+// Mobile Primary Menu matching reference image exactly
+const mobilePrimaryMenu = [
+  { to: "/", label: "Dashboard", icon: LayoutGrid, bg: "#EDE9FE", color: "#5146E5", end: true },
+  { to: "/products", label: "Products", icon: Package, bg: "#DBEAFE", color: "#2563EB" },
+  { to: "/customers", label: "Customers", icon: Users, bg: "#D1FAE5", color: "#059669" },
+  { to: "/vendors", label: "Vendors", icon: Truck, bg: "#FFEDD5", color: "#EA580C" },
+  { to: "/invoices", label: "Invoices", icon: FileText, bg: "#FCE7F3", color: "#DB2777" },
+  { to: "/sales-orders", label: "Sales Orders", icon: ShoppingCart, bg: "#CCFBF1", color: "#0D9488" },
+  { to: "/purchase-orders", label: "Purchase Orders", icon: ShoppingBag, bg: "#F3E8FF", color: "#9333EA" },
+  { to: "/inventory", label: "Inventory", icon: Archive, bg: "#E0E7FF", color: "#4F46E5" },
+  { to: "/warehouses", label: "Warehouses", icon: Warehouse, bg: "#E0F2FE", color: "#0284C7" },
+  { to: "/reports", label: "Reports & Analytics", icon: BarChart3, bg: "#DCFCE7", color: "#16A34A" },
+  { to: "/settings", label: "Settings & Configuration", icon: Settings, bg: "#EDE9FE", color: "#7C3AED" },
+];
+
+const mobileExtraMenu = [
+  { to: "/manufacturing", label: "Production & BOM Formula", icon: Boxes, bg: "#FEF3C7", color: "#D97706" },
+  { to: "/estimates", label: "Estimates & Quotes", icon: FileCheck, bg: "#CFFAFE", color: "#0891B2" },
+  { to: "/payments", label: "Payments Received", icon: DollarSign, bg: "#DCFCE7", color: "#16A34A" },
+  { to: "/adjustments", label: "Stock Adjustments", icon: RefreshCw, bg: "#EDE9FE", color: "#6366F1" },
+  { to: "/transfers", label: "Warehouse Transfers", icon: ArrowLeftRight, bg: "#DBEAFE", color: "#2563EB" },
+  { to: "/users", label: "Users & Staff Roles", icon: UserCog, bg: "#E2E8F0", color: "#475569" },
+  { to: "/audit", label: "Audit & Security Log", icon: ClipboardList, bg: "#FFE4E6", color: "#E11D48" },
+  { to: "/integrations", label: "API Integrations", icon: Plug, bg: "#EDE9FE", color: "#7C3AED" },
+];
+
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
   readonly userChoice: Promise<{
@@ -104,11 +131,13 @@ export function AppShell() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   // Auto-close sidebar on navigation
   useEffect(() => {
     setSidebarOpen(false);
     setUserDropdownOpen(false);
+    setMobileMoreOpen(false);
   }, [location.pathname]);
 
   // Global Ctrl+K shortcut listener
@@ -231,8 +260,8 @@ export function AppShell() {
         aria-hidden="true"
       />
 
-      {/* ── Dark Premium Sidebar ── */}
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Sidebar Navigation">
+      {/* ── Dark Premium Sidebar (Desktop Only) ── */}
+      <aside className={`sidebar desktop-sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Sidebar Navigation">
         {/* Brand Header */}
         <div className="sidebar-logo">
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -514,6 +543,156 @@ export function AppShell() {
           </div>
         </div>
       </aside>
+
+      {/* ── Oscar Mobile Menu Screen Matching Reference Image ── */}
+      <div
+        className={`mobile-menu-screen ${sidebarOpen ? "open" : ""}`}
+        aria-label="Mobile Navigation"
+      >
+        {/* Header with Oscar branding and actions */}
+        <div className="m-menu-header">
+          <div className="m-menu-brand">
+            <div className="m-menu-brand-icon">
+              <ShoppingCart size={20} color="#FFFFFF" />
+            </div>
+            <div>
+              <h2 className="m-menu-brand-title">Oscar</h2>
+              <div className="m-menu-brand-sub">Inventory &amp; Billing</div>
+            </div>
+          </div>
+
+          <div className="m-menu-header-actions">
+            <button
+              type="button"
+              className="m-menu-icon-btn"
+              onClick={() => {
+                closeSidebar();
+                nav("/notifications");
+              }}
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <Bell size={18} />
+              <span className="m-menu-badge-dot">3</span>
+            </button>
+            <button
+              type="button"
+              className="m-menu-icon-btn"
+              onClick={closeSidebar}
+              title="Close Menu"
+              aria-label="Close Menu"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="m-menu-body">
+          {/* Profile / Business Information Card */}
+          <div
+            className="m-business-card"
+            onClick={() => {
+              closeSidebar();
+              nav("/settings");
+            }}
+            title="Organization Settings"
+          >
+            <div className="m-business-icon-tile">
+              <Store size={22} />
+            </div>
+            <div className="m-business-info">
+              <div className="m-business-name-row">
+                <span className="m-business-name">{user?.organization?.name || "ABC Traders"}</span>
+                <BadgeCheck size={16} color="#0284C7" />
+              </div>
+              <div className="m-business-sub">
+                GST: {(user?.organization as any)?.gstin || "33ABCDE1234F1Z5"}
+              </div>
+            </div>
+            <div className="m-business-right">
+              <span className="m-role-pill">
+                👑 {user?.role || "Admin"}
+              </span>
+              <ChevronRight size={16} className="m-menu-arrow" />
+            </div>
+          </div>
+
+          {/* Primary Menu Items matching reference image */}
+          {mobilePrimaryMenu.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
+                onClick={closeSidebar}
+              >
+                <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
+                  <Icon size={19} />
+                </div>
+                <span className="m-menu-label">{item.label}</span>
+                <ChevronRight size={16} className="m-menu-arrow" />
+              </NavLink>
+            );
+          })}
+
+          {/* Expand / Collapse Button for More Operations */}
+          <button
+            type="button"
+            className="m-menu-more-btn"
+            onClick={() => setMobileMoreOpen((p) => !p)}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Sparkles size={16} />
+              <span>{mobileMoreOpen ? "Hide Extra Modules" : "More Operations (8 Modules)"}</span>
+            </div>
+            <ChevronDown
+              size={16}
+              style={{
+                transform: mobileMoreOpen ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 180ms ease",
+              }}
+            />
+          </button>
+
+          {/* Extra Modules List */}
+          {mobileMoreOpen &&
+            mobileExtraMenu.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => `m-menu-item${isActive ? " active" : ""}`}
+                  onClick={closeSidebar}
+                >
+                  <div className="m-menu-icon-tile" style={{ background: item.bg, color: item.color }}>
+                    <Icon size={18} />
+                  </div>
+                  <span className="m-menu-label">{item.label}</span>
+                  <ChevronRight size={16} className="m-menu-arrow" />
+                </NavLink>
+              );
+            })}
+
+          {/* Separate Logout Card */}
+          <div
+            className="m-logout-card"
+            onClick={() => {
+              closeSidebar();
+              void logout().then(() => nav("/login"));
+            }}
+            title="Sign Out"
+          >
+            <div className="m-logout-icon-tile">
+              <LogOut size={18} />
+            </div>
+            <span className="m-logout-label">Logout</span>
+            <ChevronRight size={16} style={{ color: "#F87171" }} />
+          </div>
+        </div>
+      </div>
 
       {/* ── Main Workspace Content ── */}
       <div className="page-content">
