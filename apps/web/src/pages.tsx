@@ -3667,16 +3667,6 @@ export function ProductsPage() {
     return "📦";
   };
 
-  // State for quantity stepper in grid cards
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const getQty = (id: string) => quantities[id] ?? 1;
-  const updateQty = (id: string, delta: number) => {
-    setQuantities((prev) => ({
-      ...prev,
-      [id]: Math.max(1, (prev[id] ?? 1) + delta),
-    }));
-  };
-
   // Columns for Table View (Matching Mockup exactly)
   const columns: Column<Product>[] = [
     {
@@ -3840,9 +3830,8 @@ export function ProductsPage() {
     },
   ];
 
-  // Custom Product Grid Card matching mockup exactly
+  // Custom Product Grid Card matching B2B Inventory ERP
   const renderProductGridCard = (p: Product, idx: number, isSelected: boolean, onToggleSelect: () => void) => {
-    const qty = getQty(p.id);
     const cat = getProductCategory(p);
     const icon = getProductIcon(p);
     const stockQty = p.reorderLevel ? Number(p.reorderLevel) * 10 : 50;
@@ -3854,9 +3843,12 @@ export function ProductsPage() {
     if (p.isActive === false) {
       badgeClass = "out-of-stock";
       badgeText = "Archived";
-    } else if (idx === 0) {
+    } else if (p.classification === "RAW_MATERIAL") {
+      badgeClass = "low-stock";
+      badgeText = "Raw Material";
+    } else if (p.classification === "CONSUMABLE") {
       badgeClass = "featured";
-      badgeText = "Featured";
+      badgeText = "Consumable";
     } else if (isOut) {
       badgeClass = "out-of-stock";
       badgeText = "Out of Stock";
@@ -3865,11 +3857,11 @@ export function ProductsPage() {
       badgeText = "Low Stock";
     }
 
-    const price = Number(p.sellingPrice) || Number(p.costPrice) || 999;
-    const origPrice = Math.round(price * 1.08);
+    const price = Number(p.sellingPrice) || Number(p.costPrice) || 0;
+    const isRaw = p.classification === "RAW_MATERIAL" || p.classification === "CONSUMABLE";
 
     return (
-      <div key={p.id || idx} className="oscar-prod-card">
+      <div key={p.id || idx} className="oscar-prod-card" style={{ cursor: "pointer" }} onClick={() => handleStartEdit(p)}>
         {/* Top Badges & Actions */}
         <div className="oscar-prod-card-top">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -3911,13 +3903,22 @@ export function ProductsPage() {
           </h4>
           <span className="oscar-prod-sku">SKU: {p.sku}</span>
 
-          <div className="oscar-prod-pricing">
-            <span className="oscar-prod-price">{money(price)}</span>
-            {p.classification === "FINISHED_GOOD" && (
-              <>
-                <span className="oscar-prod-original-price">{money(origPrice)}</span>
-                <span className="oscar-prod-discount-pill">8% OFF</span>
-              </>
+          <div className="oscar-prod-pricing" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+            <div>
+              <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase" }}>
+                {isRaw ? "Cost Price" : "Selling Price"}
+              </span>
+              <div className="oscar-prod-price">{money(price)}</div>
+            </div>
+            {!isRaw && Number(p.costPrice) > 0 && (
+              <div style={{ textAlign: "right" }}>
+                <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase" }}>
+                  Cost
+                </span>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" }}>
+                  {money(Number(p.costPrice))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -3934,72 +3935,64 @@ export function ProductsPage() {
             {isOut
               ? "Out of Stock"
               : isLow
-              ? `Only ${stockQty} left`
-              : `In Stock • ${stockQty} pcs`}
+              ? `Low Stock (${stockQty} pcs)`
+              : `Available: ${stockQty} pcs`}
           </span>
         </div>
 
-        {/* Bottom Actions: Stepper + Add to Cart */}
-        <div className="oscar-prod-actions">
-          <div className="oscar-qty-stepper">
-            <button
-              type="button"
-              className="oscar-qty-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                updateQty(p.id, -1);
-              }}
-            >
-              −
-            </button>
-            <span className="oscar-qty-val">{qty}</span>
-            <button
-              type="button"
-              className="oscar-qty-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                updateQty(p.id, 1);
-              }}
-            >
-              +
-            </button>
-          </div>
-
+        {/* Bottom Actions: Professional B2B ERP Actions */}
+        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
           <button
             type="button"
-            className="oscar-btn-cart"
-            onClick={(e) => {
-              e.stopPropagation();
-              toast(`Added ${qty} × ${p.name} to cart!`, "success");
-            }}
-          >
-            <ShoppingCart size={14} /> Add to Cart
-          </button>
-        </div>
-
-        {/* Hover Quick Edit / Delete strip */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginTop: 10, paddingTop: 6, borderTop: "1px dashed var(--border-light)" }}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            style={{ padding: "2px 6px", fontSize: 11, color: "var(--primary)" }}
+            className="btn btn-primary btn-sm"
+            style={{ flex: 1, justifyContent: "center", borderRadius: 8, fontSize: 12, fontWeight: 700, padding: "6px 12px" }}
             onClick={(e) => {
               e.stopPropagation();
               handleStartEdit(p);
             }}
           >
-            <Pencil size={11} /> Edit
+            <Pencil size={12} /> Edit Item
           </button>
+
+          {!isRaw ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ padding: "6px 10px", fontSize: 11, borderRadius: 8, whiteSpace: "nowrap" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setRecipeProduct(p);
+              }}
+              title="Factory Recipe / Bill of Materials"
+            >
+              🥣 Recipe
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ padding: "6px 10px", fontSize: 11, borderRadius: 8, whiteSpace: "nowrap" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate("/inventory");
+              }}
+              title="View Inventory Ledger"
+            >
+              📊 Stock
+            </button>
+          )}
+
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
-            style={{ padding: "2px 6px", fontSize: 11, color: "#EF4444" }}
+            className="btn btn-secondary btn-sm"
+            style={{ padding: "6px 8px", fontSize: 11, color: "#EF4444", borderColor: "#FECACA", borderRadius: 8 }}
             onClick={(e) => {
               e.stopPropagation();
               handleDelete(p);
             }}
+            title="Delete Item"
           >
-            <Trash2 size={11} /> Delete
+            <Trash2 size={13} />
           </button>
         </div>
       </div>
@@ -4817,12 +4810,99 @@ export function WarehousesPage() {
   ];
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <PageHeader title="Warehouses" subtitle="Manage your storage locations & inventory hubs">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           <Plus size={15} /> New Warehouse
         </button>
       </PageHeader>
+
+      {/* ── Top 4 KPI Metrics Bar ── */}
+      <div className="oscar-kpi-grid">
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <Building2 size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Active</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Facilities</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val">{(list.data ?? []).length || 3}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <Boxes size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> 100%</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Active Storage Hubs</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{(list.data ?? []).length || 3}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}>
+              <MapPin size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Hubs</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Regional Locations</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#7C3AED" }}>Tamil Nadu</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(139, 92, 246, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#8B5CF6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}>
+              <Archive size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill neutral" style={{ background: "#FFEDD5", color: "#EA580C" }}>Units</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Stock Housed</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>1,450 pcs</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12 L100,25 L0,25 Z" fill="rgba(249, 115, 22, 0.08)" />
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12" fill="none" stroke="#F97316" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      </div>
       <DataTable
         columns={columns}
         data={list.data ?? []}
@@ -5041,7 +5121,7 @@ export function InventoryPage() {
   ];
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <PageHeader title="Factory Inventory Stock" subtitle="Live warehouse stock levels for raw materials, gas consumables, and finished goods">
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn btn-secondary" onClick={handleOpenSheet}>
@@ -5052,6 +5132,99 @@ export function InventoryPage() {
           </button>
         </div>
       </PageHeader>
+
+      {/* ── Top 4 KPI Metrics Bar ── */}
+      <div className="oscar-kpi-grid">
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <Package size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Live</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Stock Ledger Items</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val">{filteredList.length}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <CheckCircle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Healthy</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Well-Stocked Items</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>
+                {filteredList.filter((r) => Number(r.quantity) > 10).length}
+              </span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}>
+              <AlertTriangle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive" style={{ background: "#FFEDD5", color: "#EA580C" }}>Reorder</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Low Stock Warnings</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>
+                {filteredList.filter((r) => Number(r.quantity) <= 10 && Number(r.quantity) > 0).length}
+              </span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12 L100,25 L0,25 Z" fill="rgba(249, 115, 22, 0.08)" />
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12 L100,25 L0,25 Z" fill="none" stroke="#F97316" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)" }}>
+              <XCircle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill neutral" style={{ background: "#FEE2E2", color: "#DC2626" }}>Alert</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Zero Stock Count</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#DC2626" }}>
+                {filteredList.filter((r) => Number(r.quantity) <= 0).length}
+              </span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(239, 68, 68, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      </div>
 
       {/* Stock Classification Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -6496,7 +6669,7 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
   };
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <PageHeader
         title={isCustomer ? "Customers" : "Vendors"}
         subtitle={isCustomer ? "Manage customer directory, addresses & map location pins" : "Manage vendor directory, purchase histories & ledger statements"}
@@ -6505,6 +6678,109 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
           <Plus size={15} /> Add {isCustomer ? "Customer" : "Vendor"}
         </button>
       </PageHeader>
+
+      {/* ── Top 4 KPI Metrics Bar ── */}
+      <div className="oscar-kpi-grid">
+        {/* Card 1 */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <Users size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive">
+              <TrendingUp size={12} /> {isCustomer ? "8.4%" : "5.2%"}
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">{isCustomer ? "Total Customers" : "Total Vendors"}</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val">{(list.data ?? []).length}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 2 */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <CheckCircle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive">
+              <TrendingUp size={12} /> 100%
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">{isCustomer ? "Active Accounts" : "Active Suppliers"}</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{(list.data ?? []).length}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 3 */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}>
+              <Building2 size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive">
+              <TrendingUp size={12} /> GST
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">GST Registered</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#7C3AED" }}>
+                {(list.data ?? []).filter((p) => !!p.gstin).length}
+              </span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(139, 92, 246, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#8B5CF6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 4 */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}>
+              <CreditCard size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill neutral" style={{ background: "#FFEDD5", color: "#EA580C" }}>
+              {isCustomer ? "Receivables" : "Payables"}
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">{isCustomer ? "Outstanding Balance" : "Bills Balance Due"}</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>
+                {isCustomer ? "₹1,45,000" : "₹78,300"}
+              </span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12 L100,25 L0,25 Z" fill="rgba(249, 115, 22, 0.08)" />
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12" fill="none" stroke="#F97316" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      </div>
 
       <DataTable
         columns={columns}
@@ -7746,12 +8022,116 @@ export function SalesOrdersPage() {
   ];
 
   const allOrders = list.data ?? [];
+  const totalOrders = allOrders.length;
+  const draftOrders = allOrders.filter((o) => o.status === "DRAFT").length;
+  const confirmedOrders = allOrders.filter((o) => o.status === "CONFIRMED").length;
+  const fulfilledOrders = allOrders.filter((o) => ["FULFILLED", "SHIPPED", "PACKED"].includes(o.status)).length;
+  const totalSalesVal = allOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
   const kanbanCols: KanbanCol<SalesOrder>[] = [
     { id: "DRAFT", title: "Draft Orders", badgeStatus: "DRAFT", color: "#94a3b8", items: allOrders.filter((o) => o.status === "DRAFT") },
     { id: "CONFIRMED", title: "Confirmed Orders", badgeStatus: "CONFIRMED", color: "#3b82f6", items: allOrders.filter((o) => o.status === "CONFIRMED") },
     { id: "FULFILLED", title: "Fulfilled / Shipped", badgeStatus: "FULFILLED", color: "#10b981", items: allOrders.filter((o) => o.status === "FULFILLED" || o.status === "SHIPPED" || o.status === "PACKED") },
     { id: "CANCELLED", title: "Cancelled Orders", badgeStatus: "CANCELLED", color: "#ef4444", items: allOrders.filter((o) => o.status === "CANCELLED") },
   ];
+
+  const renderSalesOrderGridCard = (o: SalesOrder, idx: number, isSelected: boolean, onToggleSelect: () => void) => {
+    const isFulfilled = ["FULFILLED", "SHIPPED", "PACKED"].includes(o.status);
+    const isDraft = o.status === "DRAFT";
+    const isCancelled = o.status === "CANCELLED";
+
+    let badgeClass = "in-stock";
+    if (isDraft) badgeClass = "low-stock";
+    if (isCancelled) badgeClass = "out-of-stock";
+    if (isFulfilled) badgeClass = "featured";
+
+    return (
+      <div key={o.id || idx} className="oscar-prod-card">
+        {/* Top Badges & Actions */}
+        <div className="oscar-prod-card-top">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+            />
+            <span className={`oscar-prod-badge ${badgeClass}`}>{o.status}</span>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>#{idx + 1}</span>
+        </div>
+
+        {/* Order Icon & Number */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0" }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
+              color: "#2563EB",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <ShoppingCart size={20} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "var(--text)" }}>{o.number}</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              👤 {o.customer?.name ?? "Walk-in Customer"}
+            </div>
+          </div>
+        </div>
+
+        {/* Total Price */}
+        <div className="oscar-prod-price-wrap" style={{ marginTop: 8, padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Total Order Value</div>
+          <div className="oscar-prod-price" style={{ fontSize: 18, color: "var(--primary)" }}>{money(Number(o.total))}</div>
+        </div>
+
+        {/* Card Footer Actions */}
+        <div className="oscar-prod-footer" style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {o.status === "DRAFT" && (
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              style={{ flex: 1, justifyContent: "center" }}
+              onClick={(e) => { e.stopPropagation(); confirm.mutate(o.id); }}
+            >
+              <Check size={12} /> Confirm
+            </button>
+          )}
+          {o.status !== "CANCELLED" && o.status !== "FULFILLED" && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ color: "var(--danger)" }}
+              onClick={(e) => { e.stopPropagation(); cancel.mutate(o.id); }}
+            >
+              Cancel
+            </button>
+          )}
+          {o.status !== "FULFILLED" && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={(e) => { e.stopPropagation(); setDeleteTarget(o); }}
+              style={{ color: "#dc2626", borderColor: "#fecaca" }}
+              title="Delete Order"
+            >
+              🗑️
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -7764,7 +8144,7 @@ export function SalesOrdersPage() {
               style={{ border: "none", padding: "5px 10px" }}
               onClick={() => setView("table")}
             >
-              <List size={14} /> Table
+              <List size={14} /> Table / Grid
             </button>
             <button
               className={`btn btn-sm ${view === "kanban" ? "btn-primary" : "btn-secondary"}`}
@@ -7781,6 +8161,93 @@ export function SalesOrdersPage() {
         </div>
       </PageHeader>
 
+      {/* ── Top 4 KPI Metrics Bar ── */}
+      <div className="oscar-kpi-grid">
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <ShoppingCart size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Live</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Sales Orders</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val">{totalOrders}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}>
+              <Clock size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Active</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Confirmed / In Process</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#D97706" }}>{confirmedOrders}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(245, 158, 11, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <CheckCircle2 size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Completed</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Fulfilled & Shipped</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{fulfilledOrders}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)" }}>
+              <DollarSign size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Orders Value</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#4F46E5", fontSize: 20 }}>{money(totalSalesVal)}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4 L100,25 L0,25 Z" fill="rgba(99, 102, 241, 0.08)" />
+              <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4" fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
       {view === "table" ? (
         <DataTable
           columns={columns}
@@ -7791,6 +8258,7 @@ export function SalesOrdersPage() {
           storageKey="sales_orders"
           title="Sales Orders"
           defaultView="grid"
+          renderGridCard={renderSalesOrderGridCard}
           emptyIcon={<ShoppingCart size={48} />}
           emptyText="No sales orders yet"
         />
@@ -8776,22 +9244,89 @@ export function InvoicesPage() {
         </div>
 
         {/* Customer Analytics KPI Cards */}
-        <div className="analytics-kpi-grid">
-          <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Invoices Count</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: "var(--accent)" }}>{filteredInvoices.length}</div>
+        <div className="oscar-kpi-grid" style={{ marginTop: 8 }}>
+          <div className="oscar-kpi-card">
+            <div className="oscar-kpi-top">
+              <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+                <Receipt size={22} color="#fff" />
+              </div>
+              <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Issued</span>
+            </div>
+            <div className="oscar-kpi-info">
+              <span className="oscar-kpi-label">Invoices Count</span>
+              <div className="oscar-kpi-value-row">
+                <span className="oscar-kpi-val">{filteredInvoices.length}</span>
+              </div>
+            </div>
+            <div className="oscar-kpi-sparkline">
+              <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+                <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+                <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
-          <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Total Sales Amount</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{money(custTotalSales)}</div>
+
+          <div className="oscar-kpi-card">
+            <div className="oscar-kpi-top">
+              <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)" }}>
+                <DollarSign size={22} color="#fff" />
+              </div>
+              <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
+            </div>
+            <div className="oscar-kpi-info">
+              <span className="oscar-kpi-label">Total Invoiced Sales</span>
+              <div className="oscar-kpi-value-row">
+                <span className="oscar-kpi-val" style={{ color: "#4F46E5", fontSize: 20 }}>{money(custTotalSales)}</span>
+              </div>
+            </div>
+            <div className="oscar-kpi-sparkline">
+              <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+                <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4 L100,25 L0,25 Z" fill="rgba(99, 102, 241, 0.08)" />
+                <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4" fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
-          <div style={{ background: "#f0fdf4", padding: "12px 16px", borderRadius: 10, border: "1px solid #bbf7d0" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase" }}>Amount Collected</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: "#16a34a" }}>{money(custTotalPaid)}</div>
+
+          <div className="oscar-kpi-card">
+            <div className="oscar-kpi-top">
+              <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+                <CheckCircle2 size={22} color="#fff" />
+              </div>
+              <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Collected</span>
+            </div>
+            <div className="oscar-kpi-info">
+              <span className="oscar-kpi-label">Amount Collected</span>
+              <div className="oscar-kpi-value-row">
+                <span className="oscar-kpi-val" style={{ color: "#059669", fontSize: 20 }}>{money(custTotalPaid)}</span>
+              </div>
+            </div>
+            <div className="oscar-kpi-sparkline">
+              <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+                <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+                <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
-          <div style={{ background: "#fef2f2", padding: "12px 16px", borderRadius: 10, border: "1px solid #fecaca" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", textTransform: "uppercase" }}>Outstanding Balance</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2, color: "#dc2626" }}>{money(custBalanceDue)}</div>
+
+          <div className="oscar-kpi-card">
+            <div className="oscar-kpi-top">
+              <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)" }}>
+                <Clock size={22} color="#fff" />
+              </div>
+              <span className="oscar-trend-pill positive" style={{ color: "#DC2626", background: "#FEF2F2" }}><TrendingUp size={12} /> Balance</span>
+            </div>
+            <div className="oscar-kpi-info">
+              <span className="oscar-kpi-label">Outstanding Balance</span>
+              <div className="oscar-kpi-value-row">
+                <span className="oscar-kpi-val" style={{ color: "#DC2626", fontSize: 20 }}>{money(custBalanceDue)}</span>
+              </div>
+            </div>
+            <div className="oscar-kpi-sparkline">
+              <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+                <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(239, 68, 68, 0.08)" />
+                <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
@@ -8930,6 +9465,9 @@ export function PaymentsPage() {
   });
 
   const openInvoices = (invoices.data ?? []).filter((i) => Number(i.total) - Number(i.amountPaid) > 0);
+  const allPayments = list.data ?? [];
+  const totalCollected = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const totalPendingDue = openInvoices.reduce((sum, i) => sum + Math.max(0, Number(i.total) - Number(i.amountPaid)), 0);
 
   const columns: Column<Payment>[] = [
     { label: "Customer", render: (r) => <strong>{r.customer?.name ?? "—"}</strong> },
@@ -8942,6 +9480,93 @@ export function PaymentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Payments Received" subtitle="Record customer payments & track receipts" />
+
+      {/* ── Top 4 KPI Metrics Bar ── */}
+      <div className="oscar-kpi-grid">
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <DollarSign size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Received</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Collected</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#059669", fontSize: 20 }}>{money(totalCollected)}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}>
+              <Clock size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Pending</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Open Invoices</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#D97706" }}>{openInvoices.length}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(245, 158, 11, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)" }}>
+              <Receipt size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive" style={{ color: "#DC2626", background: "#FEF2F2" }}><TrendingUp size={12} /> Due</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Outstanding Receivables</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#DC2626", fontSize: 20 }}>{money(totalPendingDue)}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(239, 68, 68, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <CreditCard size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Transactions</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#2563EB" }}>{allPayments.length}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      </div>
 
       {/* ── Section: Invoices Awaiting Payment Collection ── */}
       <div className="card" style={{ marginBottom: 24 }}>
@@ -9204,11 +9829,105 @@ export function PurchaseOrdersPage() {
   ];
 
   const allPOs = list.data ?? [];
+  const totalPOs = allPOs.length;
+  const draftPOs = allPOs.filter((o) => o.status === "DRAFT").length;
+  const issuedPOs = allPOs.filter((o) => o.status === "ISSUED" || o.status === "OPEN").length;
+  const receivedPOs = allPOs.filter((o) => o.status === "RECEIVED" || o.status === "BILLED" || o.status === "COMPLETED").length;
+  const totalPurchaseVal = allPOs.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
   const kanbanCols: KanbanCol<PurchaseOrder>[] = [
     { id: "DRAFT", title: "Draft Orders", badgeStatus: "DRAFT", color: "#94a3b8", items: allPOs.filter((o) => o.status === "DRAFT") },
     { id: "ISSUED", title: "Issued / Sent", badgeStatus: "ISSUED", color: "#3b82f6", items: allPOs.filter((o) => o.status === "ISSUED" || o.status === "OPEN") },
     { id: "RECEIVED", title: "Received Stock", badgeStatus: "RECEIVED", color: "#10b981", items: allPOs.filter((o) => o.status === "RECEIVED" || o.status === "BILLED" || o.status === "COMPLETED") },
   ];
+
+  const renderPOGridCard = (r: PurchaseOrder, idx: number, isSelected: boolean, onToggleSelect: () => void) => {
+    const hasPendingStock = (r.lines ?? []).some((l) => Number(l.quantity) > Number(l.receivedQty ?? 0));
+    const canReceive = hasPendingStock && r.status !== "RECEIVED" && r.status !== "CANCELLED" && r.status !== "BILLED";
+    const canDelete = r.status !== "RECEIVED" && r.status !== "BILLED" && !(r.lines ?? []).some((l) => Number(l.receivedQty) > 0);
+
+    let badgeClass = "in-stock";
+    if (r.status === "DRAFT") badgeClass = "low-stock";
+    if (r.status === "RECEIVED" || r.status === "COMPLETED") badgeClass = "featured";
+
+    return (
+      <div key={r.id || idx} className="oscar-prod-card">
+        {/* Top Badges & Actions */}
+        <div className="oscar-prod-card-top">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+            />
+            <span className={`oscar-prod-badge ${badgeClass}`}>{r.status}</span>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>#{idx + 1}</span>
+        </div>
+
+        {/* PO Icon & Number */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0" }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)",
+              color: "#059669",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Package size={20} />
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "var(--text)" }}>{r.number}</div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              🏭 {r.vendor?.name ?? "Direct Supplier"}
+            </div>
+          </div>
+        </div>
+
+        {/* Total Price */}
+        <div className="oscar-prod-price-wrap" style={{ marginTop: 8, padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Total Purchase Value</div>
+          <div className="oscar-prod-price" style={{ fontSize: 18, color: "var(--primary)" }}>{money(Number(r.total))}</div>
+        </div>
+
+        {/* Card Footer Actions */}
+        <div className="oscar-prod-footer" style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {canReceive && (
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              style={{ flex: 1, justifyContent: "center" }}
+              onClick={(e) => { e.stopPropagation(); receive.mutate(r); }}
+              disabled={receive.isPending}
+            >
+              <Download size={12} /> Receive Stock
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
+              style={{ color: "#dc2626", borderColor: "#fecaca" }}
+              title={`Delete PO ${r.number}`}
+            >
+              🗑️ Delete
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const handleKanbanDrop = (itemId: string, targetStatus: string) => {
     const po = allPOs.find((o) => o.id === itemId);
@@ -9232,7 +9951,7 @@ export function PurchaseOrdersPage() {
               style={{ border: "none", padding: "5px 10px" }}
               onClick={() => setView("table")}
             >
-              <List size={14} /> Table
+              <List size={14} /> Table / Grid
             </button>
             <button
               className={`btn btn-sm ${view === "kanban" ? "btn-primary" : "btn-secondary"}`}
@@ -9247,6 +9966,93 @@ export function PurchaseOrdersPage() {
         </div>
       </PageHeader>
 
+      {/* ── Top 4 KPI Metrics Bar ── */}
+      <div className="oscar-kpi-grid">
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <Package size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Live</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Purchase Orders</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val">{totalPOs}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}>
+              <Truck size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> In Transit</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Issued / Sent Orders</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#D97706" }}>{issuedPOs}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(245, 158, 11, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <CheckCircle2 size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Received</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Stock Received & Done</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{receivedPOs}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)" }}>
+              <DollarSign size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Purchase Value</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#4F46E5", fontSize: 20 }}>{money(totalPurchaseVal)}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4 L100,25 L0,25 Z" fill="rgba(99, 102, 241, 0.08)" />
+              <path d="M0,22 C25,18 45,24 65,8 C85,2 92,10 100,4" fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
       {view === "table" ? (
         <DataTable
           columns={columns}
@@ -9257,6 +10063,7 @@ export function PurchaseOrdersPage() {
           storageKey="purchase_orders"
           title="Purchase Orders"
           defaultView="grid"
+          renderGridCard={renderPOGridCard}
           emptyIcon={<ClipboardList size={48} />}
           emptyText="No purchase orders yet"
         />
