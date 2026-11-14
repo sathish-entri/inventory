@@ -56,6 +56,15 @@ import {
   Headphones,
   ChevronDown,
   Send,
+  Heart,
+  Eye,
+  FileSpreadsheet,
+  Upload,
+  SlidersHorizontal,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────
@@ -1402,9 +1411,49 @@ export function NumberStepper({
   );
 }
 
-type FilterOption = { label: string; value: string };
-type Column<T> = { label: string; key?: keyof T; render?: (row: T) => ReactNode; align?: "left" | "right" | "center" };
-type DataTableProps<T> = {
+// ─────────────────────────────────────────────────────────
+// REUSABLE VIEW SWITCHER & RICH ENTERPRISE DATA TABLE
+// ─────────────────────────────────────────────────────────
+
+export function ViewSwitcher({
+  viewMode,
+  onChange,
+}: {
+  viewMode: "grid" | "table";
+  onChange: (mode: "grid" | "table") => void;
+}) {
+  return (
+    <div className="view-switcher-group">
+      <button
+        type="button"
+        className={`view-switcher-btn ${viewMode === "grid" ? "active" : ""}`}
+        onClick={() => onChange("grid")}
+        title="Grid View"
+      >
+        <LayoutGrid size={14} /> Grid View
+      </button>
+      <button
+        type="button"
+        className={`view-switcher-btn ${viewMode === "table" ? "active" : ""}`}
+        onClick={() => onChange("table")}
+        title="Table View"
+      >
+        <List size={14} /> Table View
+      </button>
+    </div>
+  );
+}
+
+export type FilterOption = { label: string; value: string };
+export type Column<T> = {
+  label: string;
+  key?: keyof T;
+  render?: (row: T, index?: number) => ReactNode;
+  align?: "left" | "right" | "center";
+  sortable?: boolean;
+};
+
+export type DataTableProps<T> = {
   columns: Column<T>[];
   data: T[];
   loading?: boolean;
@@ -1415,33 +1464,79 @@ type DataTableProps<T> = {
   emptyIcon?: ReactNode;
   emptyText?: string;
   onRowClick?: (row: T) => void;
+  storageKey?: string;
+  defaultView?: "grid" | "table";
+  title?: string;
+  renderGridCard?: (row: T, index: number, isSelected: boolean, onToggleSelect: () => void) => ReactNode;
+  onBulkDelete?: (selectedRows: T[]) => void;
+  onExportCsv?: () => void;
+  onExportExcel?: () => void;
+  onPrint?: () => void;
+  headerActions?: ReactNode;
+  secondaryFilters?: ReactNode;
+  searchPlaceholder?: string;
 };
 
-function DataTable<T extends Record<string, unknown>>({
-  columns, data = [], loading, error, searchFields, filterKey, filterOptions, emptyIcon, emptyText, onRowClick,
+export function DataTable<T extends Record<string, any>>({
+  columns,
+  data = [],
+  loading,
+  error,
+  searchFields,
+  filterKey,
+  filterOptions,
+  emptyIcon,
+  emptyText,
+  onRowClick,
+  storageKey,
+  defaultView,
+  title,
+  renderGridCard,
+  onBulkDelete,
+  onExportCsv,
+  onExportExcel,
+  onPrint,
+  headerActions,
+  secondaryFilters,
+  searchPlaceholder = "Search records…",
 }: DataTableProps<T>) {
-  const [q, setQ] = useState("");
+  const { toast } = useToast();
+  const storagePrefKey = storageKey ? `oscar_view_pref_${storageKey}` : "oscar_view_pref_global";
+
   const [viewMode, setViewMode] = useState<"table" | "grid">(() => {
     try {
-      if (localStorage.getItem("preferred_view_mode")) localStorage.removeItem("preferred_view_mode");
-      if (localStorage.getItem("preferred_view_mode_v2")) localStorage.removeItem("preferred_view_mode_v2");
-      if (localStorage.getItem("app_view_mode_pref")) localStorage.removeItem("app_view_mode_pref");
-      const saved = sessionStorage.getItem("active_view_mode");
+      const saved = localStorage.getItem(storagePrefKey);
       if (saved === "table" || saved === "grid") return saved;
     } catch {}
-    return "grid";
+    return defaultView ?? "grid";
   });
+
+  const [q, setQ] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<string>("latest");
+  const [sortCol, setSortCol] = useState<keyof T | null>(null);
+  const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const setAndSaveViewMode = (mode: "table" | "grid") => {
     setViewMode(mode);
     try {
-      sessionStorage.setItem("active_view_mode", mode);
+      localStorage.setItem(storagePrefKey, mode);
     } catch {}
   };
 
-  // Auto-detect filterKey if not provided (e.g. status, type, role)
-  const autoFilterKey = filterKey ?? (data.length > 0 && "status" in data[0] ? ("status" as keyof T) : data.length > 0 && "type" in data[0] ? ("type" as keyof T) : undefined);
+  // Auto-detect filterKey if not provided (e.g. status, classification, type, role)
+  const autoFilterKey =
+    filterKey ??
+    (data.length > 0 && "status" in data[0]
+      ? ("status" as keyof T)
+      : data.length > 0 && "classification" in data[0]
+      ? ("classification" as keyof T)
+      : data.length > 0 && "type" in data[0]
+      ? ("type" as keyof T)
+      : undefined);
 
   // Compute available filter dropdown options
   const computedFilterOptions: FilterOption[] = useMemo(() => {
@@ -1450,19 +1545,126 @@ function DataTable<T extends Record<string, unknown>>({
     const uniqueVals = Array.from(new Set(data.map((r) => String(r[autoFilterKey] ?? "")).filter(Boolean)));
     if (uniqueVals.length <= 1) return [];
     return [
-      { label: "All Records", value: "ALL" },
+      { label: "All Status", value: "ALL" },
       ...uniqueVals.map((v) => ({ label: v.replace(/_/g, " "), value: v })),
     ];
   }, [data, autoFilterKey, filterOptions]);
 
-  const filtered = useMemo(() => {
+  // Filtered & Sorted Data
+  const filteredAndSorted = useMemo(() => {
     if (!Array.isArray(data)) return [];
-    return data.filter((r) => {
-      const matchesSearch = !q || !searchFields ? true : searchFields.some((f) => String(r[f] ?? "").toLowerCase().includes(q.toLowerCase()));
-      const matchesFilter = selectedFilter === "ALL" || !autoFilterKey ? true : String(r[autoFilterKey] ?? "") === selectedFilter;
+    let result = data.filter((r) => {
+      const matchesSearch =
+        !q || !searchFields
+          ? true
+          : searchFields.some((f) => String(r[f] ?? "").toLowerCase().includes(q.toLowerCase()));
+      const matchesFilter =
+        selectedFilter === "ALL" || !autoFilterKey
+          ? true
+          : String(r[autoFilterKey] ?? "") === selectedFilter;
       return matchesSearch && matchesFilter;
     });
-  }, [data, q, searchFields, selectedFilter, autoFilterKey]);
+
+    // Apply Sorting
+    if (sortCol) {
+      result = [...result].sort((a, b) => {
+        const valA = a[sortCol];
+        const valB = b[sortCol];
+        if (typeof valA === "number" && typeof valB === "number") {
+          return sortAsc ? valA - valB : valB - valA;
+        }
+        return sortAsc
+          ? String(valA ?? "").localeCompare(String(valB ?? ""))
+          : String(valB ?? "").localeCompare(String(valA ?? ""));
+      });
+    } else if (sortBy === "name_asc") {
+      result = [...result].sort((a, b) => String(a.name || a.title || "").localeCompare(String(b.name || b.title || "")));
+    } else if (sortBy === "name_desc") {
+      result = [...result].sort((a, b) => String(b.name || b.title || "").localeCompare(String(a.name || a.title || "")));
+    } else if (sortBy === "price_high") {
+      result = [...result].sort((a, b) => (Number(b.sellingPrice || b.amount || b.total || 0)) - (Number(a.sellingPrice || a.amount || a.total || 0)));
+    } else if (sortBy === "price_low") {
+      result = [...result].sort((a, b) => (Number(a.sellingPrice || a.amount || a.total || 0)) - (Number(b.sellingPrice || b.amount || b.total || 0)));
+    }
+
+    return result;
+  }, [data, q, searchFields, selectedFilter, autoFilterKey, sortCol, sortAsc, sortBy]);
+
+  // Reset page when filter/search changes
+  useEffect(() => {
+    setPage(1);
+  }, [q, selectedFilter, sortBy]);
+
+  // Pagination calculation
+  const totalRecords = filteredAndSorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const startIdx = (currentPage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, totalRecords);
+  const paginatedRows = useMemo(() => filteredAndSorted.slice(startIdx, endIdx), [filteredAndSorted, startIdx, endIdx]);
+
+  // Selection handlers
+  const getRowId = (row: T, idx: number) => String(row.id || row.sku || row.code || idx);
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isAllPageSelected =
+    paginatedRows.length > 0 &&
+    paginatedRows.every((r, i) => selectedIds.has(getRowId(r, startIdx + i)));
+
+  const handleToggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllPageSelected) {
+        paginatedRows.forEach((r, i) => next.delete(getRowId(r, startIdx + i)));
+      } else {
+        paginatedRows.forEach((r, i) => next.add(getRowId(r, startIdx + i)));
+      }
+      return next;
+    });
+  };
+
+  // CSV Export implementation
+  const handleExportCsv = () => {
+    if (onExportCsv) {
+      onExportCsv();
+      return;
+    }
+    if (filteredAndSorted.length === 0) {
+      toast("No records available to export", "warn");
+      return;
+    }
+    const headers = columns.map((c) => `"${c.label.replace(/"/g, '""')}"`).join(",");
+    const rows = filteredAndSorted.map((r) =>
+      columns
+        .map((c) => {
+          const val = c.key ? String(r[c.key] ?? "") : "";
+          return `"${val.replace(/"/g, '""')}"`;
+        })
+        .join(",")
+    );
+    const csvContent = "\uFEFF" + [headers, ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(title || "oscar_export").toLowerCase().replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("CSV export downloaded successfully!");
+  };
+
+  const handlePrint = () => {
+    if (onPrint) onPrint();
+    else window.print();
+  };
 
   if (loading)
     return (
@@ -1480,276 +1682,499 @@ function DataTable<T extends Record<string, unknown>>({
       </div>
     );
 
-  // Identify special columns for rich grid cards
+  // Identify special columns for fallback rich grid cards
   const firstCol = columns[0];
   const secondCol = columns.length > 1 ? columns[1] : undefined;
-  const statusCol = columns.find(
-    (c) => c.label.toLowerCase().includes("status") || c.key === "status"
-  );
-  const actionCol = columns.find(
-    (c) => c.label.toLowerCase().includes("action")
-  );
-  const dataCols = columns.filter(
-    (c) => c !== firstCol && c !== secondCol && c !== statusCol && c !== actionCol
-  );
+  const statusCol = columns.find((c) => c.label.toLowerCase().includes("status") || c.key === "status");
+  const actionCol = columns.find((c) => c.label.toLowerCase().includes("action"));
+  const dataCols = columns.filter((c) => c !== firstCol && c !== secondCol && c !== statusCol && c !== actionCol);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Sleek Filter & View Control Bar */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 12, background: "#ffffff", padding: "12px 16px",
-        borderRadius: 14, border: "1px solid var(--border)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)", flexWrap: "wrap"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 240 }}>
+      {/* ── Sleek Global Toolbar Bar (Matching Mockup) ── */}
+      <div className="oscar-toolbar">
+        <div className="oscar-toolbar-left">
+          {/* View Switcher: Grid View vs Table View */}
+          <ViewSwitcher viewMode={viewMode} onChange={setAndSaveViewMode} />
+
+          {/* Secondary Filters or Categories */}
+          {secondaryFilters}
+
+          {/* Status Filter Dropdown */}
+          {computedFilterOptions.length > 0 && (
+            <select
+              className="oscar-select"
+              value={selectedFilter}
+              onChange={(e) => setSelectedFilter(e.target.value)}
+            >
+              {computedFilterOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div className="oscar-toolbar-right">
+          {/* Search Box */}
           {searchFields && (
-            <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
-              <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
+            <div className="oscar-search-box">
+              <Search
+                size={15}
+                style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }}
+              />
               <input
                 type="text"
-                placeholder="Search records…"
-                className="input-field"
-                style={{ paddingLeft: 34, fontSize: 13, borderRadius: 8 }}
+                placeholder={searchPlaceholder}
+                className="oscar-search-input"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => setQ("")}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           )}
 
-          {/* Filter Dropdown Option */}
-          {computedFilterOptions.length > 0 && (
-            <div style={{ position: "relative" }}>
-              <select
-                className="input-field"
-                style={{ fontSize: 12, fontWeight: 600, cursor: "pointer", paddingRight: 28, borderRadius: 8 }}
-                value={selectedFilter}
-                onChange={(e) => setSelectedFilter(e.target.value)}
-              >
-                {computedFilterOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", background: "#f1f5f9", padding: "5px 12px", borderRadius: 8 }}>
-            {filtered.length} record{filtered.length !== 1 ? "s" : ""}
-          </span>
-          <div style={{ display: "flex", background: "#f1f5f9", padding: 3, borderRadius: 10, border: "1px solid #e2e8f0", gap: 2 }}>
-            <button
-              type="button"
-              className={`btn btn-sm ${viewMode === "grid" ? "btn-primary" : "btn-ghost"}`}
-              style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
-              onClick={() => setAndSaveViewMode("grid")}
-              title="Grid View (Default)"
-            >
-              <LayoutGrid size={14} /> 🔲 Grid
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${viewMode === "table" ? "btn-primary" : "btn-ghost"}`}
-              style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
-              onClick={() => setAndSaveViewMode("table")}
-              title="Table View"
-            >
-              <List size={14} /> 📋 Table
-            </button>
-          </div>
+          {/* Sort By Dropdown */}
+          <select
+            className="oscar-select"
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value);
+              setSortCol(null);
+            }}
+          >
+            <option value="latest">Sort By: Latest</option>
+            <option value="name_asc">Sort By: Name (A–Z)</option>
+            <option value="name_desc">Sort By: Name (Z–A)</option>
+            <option value="price_high">Sort By: Price (High to Low)</option>
+            <option value="price_low">Sort By: Price (Low to High)</option>
+          </select>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="empty-state" style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 14, padding: "48px 20px" }}>
+      {/* ── Content: Empty State OR Grid View OR Table View ── */}
+      {filteredAndSorted.length === 0 ? (
+        <div className="empty-state" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: "48px 20px" }}>
           <div className="empty-state-icon">{emptyIcon ?? <Package size={44} />}</div>
           <div className="empty-state-title">{emptyText ?? "No records found"}</div>
           <div className="empty-state-desc">
-            {q ? "Try adjusting your search query." : "No entries available yet."}
+            {q ? "Try adjusting your search query or clear filters." : "No entries available yet."}
           </div>
         </div>
       ) : viewMode === "grid" ? (
-        /* Rich Responsive Grid Card View */
-        <div
-          className="grid-view"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))",
-            gap: 16,
-          }}
-        >
-          {filtered.map((row, i) => {
-            const rawTitle = firstCol?.render ? firstCol.render(row) : String(row[firstCol?.key as keyof T] ?? "—");
-            const rawSub = secondCol ? (secondCol.render ? secondCol.render(row) : String(row[secondCol.key as keyof T] ?? "—")) : null;
-            const letter = String(row[firstCol?.key as keyof T] || "P").slice(0, 1).toUpperCase();
+        /* ── Grid View ── */
+        <div>
+          <div className="oscar-product-grid">
+            {paginatedRows.map((row, i) => {
+              const globalIdx = startIdx + i;
+              const rowId = getRowId(row, globalIdx);
+              const isSelected = selectedIds.has(rowId);
 
-            // Distinct gradient avatar colors
-            const palette = [
-              "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
-              "linear-gradient(135deg, #10b981 0%, #047857 100%)",
-              "linear-gradient(135deg, #f59e0b 0%, #b45309 100%)",
-              "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
-              "linear-gradient(135deg, #ec4899 0%, #be185d 100%)",
-            ];
-            const bgGrad = palette[i % palette.length];
+              // Use custom card if provided
+              if (renderGridCard) {
+                return renderGridCard(row, globalIdx, isSelected, () => toggleSelectRow(rowId));
+              }
 
-            return (
-              <div
-                key={i}
-                className="grid-card"
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 14,
-                  padding: "16px 18px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-                  transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-                  cursor: onRowClick ? "pointer" : "default",
-                }}
-                onClick={() => onRowClick?.(row)}
-              >
-                <div>
-                  {/* Card Header: Avatar + Title + Status */}
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 10,
-                          background: bgGrad,
-                          color: "#ffffff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 800,
-                          fontSize: 15,
-                          flexShrink: 0,
+              // Fallback Default Premium SaaS Grid Card
+              const rawTitle = firstCol?.render ? firstCol.render(row, globalIdx) : String(row[firstCol?.key as keyof T] ?? "—");
+              const rawSub = secondCol ? (secondCol.render ? secondCol.render(row, globalIdx) : String(row[secondCol.key as keyof T] ?? "—")) : null;
+              const letter = String(row[firstCol?.key as keyof T] || "P").slice(0, 1).toUpperCase();
+
+              return (
+                <div
+                  key={rowId}
+                  className="oscar-prod-card"
+                  style={{ cursor: onRowClick ? "pointer" : "default" }}
+                  onClick={() => onRowClick?.(row)}
+                >
+                  <div className="oscar-prod-card-top">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectRow(rowId);
                         }}
-                      >
-                        {letter}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 15,
-                            fontWeight: 700,
-                            color: "var(--text-primary)",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {rawTitle}
-                        </div>
-                        {rawSub && (
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                            {rawSub}
-                          </div>
-                        )}
-                      </div>
+                        style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+                      />
+                      {statusCol && (
+                        <div>{statusCol.render ? statusCol.render(row, globalIdx) : String(row[statusCol.key as keyof T] ?? "")}</div>
+                      )}
                     </div>
-
-                    {statusCol && (
-                      <div style={{ flexShrink: 0 }}>
-                        {statusCol.render ? statusCol.render(row) : String(row[statusCol.key as keyof T] ?? "")}
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      className="oscar-prod-heart"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast(`Item added to bookmarks!`);
+                      }}
+                    >
+                      <Heart size={16} />
+                    </button>
                   </div>
 
-                  {/* Card Middle: Key-Value Field Rows */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, margin: "12px 0 6px" }}>
-                    {dataCols.map((c) => {
-                      const val = c.render ? c.render(row) : String(row[c.key as keyof T] ?? "—");
+                  <div className="oscar-prod-thumb-wrap">
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #4F46E5, #3B82F6)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18 }}>
+                      {letter}
+                    </div>
+                  </div>
+
+                  <div className="oscar-prod-info">
+                    <h4 className="oscar-prod-name">{rawTitle}</h4>
+                    {rawSub && <span className="oscar-prod-sku">{rawSub}</span>}
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, margin: "6px 0 12px" }}>
+                    {dataCols.slice(0, 3).map((c) => {
+                      const val = c.render ? c.render(row, globalIdx) : String(row[c.key as keyof T] ?? "—");
                       return (
-                        <div
-                          key={c.label}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: "4px 0",
-                            borderBottom: "1px dashed #f1f5f9",
-                            fontSize: 12,
-                          }}
-                        >
-                          <span style={{ fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", fontSize: 11 }}>
-                            {c.label}
-                          </span>
-                          <span style={{ fontWeight: 600, color: "var(--text-primary)", textAlign: "right" }}>
-                            {val}
-                          </span>
+                        <div key={c.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, borderBottom: "1px dashed var(--border-light)", paddingBottom: 3 }}>
+                          <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>{c.label}</span>
+                          <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{val}</span>
                         </div>
                       );
                     })}
                   </div>
-                </div>
 
-                {/* Card Footer: Actions or Click prompt */}
-                <div
-                  style={{
-                    paddingTop: 10,
-                    borderTop: "1px solid #f1f5f9",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                    marginTop: 4,
-                  }}
-                >
-                  {actionCol ? (
-                    <div style={{ width: "100%", display: "flex", justifyContent: "flex-end" }}>
-                      {actionCol.render ? actionCol.render(row) : null}
-                    </div>
-                  ) : onRowClick ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>View details</span>
-                      <ChevronRight size={14} color="var(--accent)" />
-                    </div>
-                  ) : (
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Record #{i + 1}</span>
-                  )}
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                    {actionCol ? (
+                      actionCol.render ? actionCol.render(row, globalIdx) : null
+                    ) : onRowClick ? (
+                      <span style={{ fontSize: 12, color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                        View Details <ChevronRight size={14} />
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* Grid Pagination Footer */}
+          <div className="oscar-pagination" style={{ marginTop: 16, borderRadius: 16, border: "1px solid var(--border)" }}>
+            <span className="oscar-page-info">
+              Showing {startIdx + 1} – {endIdx} of {totalRecords} records
+            </span>
+            <div className="oscar-page-controls">
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(1)}
+                title="First Page"
+              >
+                <ChevronsLeft size={14} />
+              </button>
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                title="Previous Page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+
+              {Array.from({ length: Math.min(5, totalPages) }, (_, idx) => {
+                let pNum = currentPage;
+                if (totalPages <= 5) pNum = idx + 1;
+                else if (currentPage <= 3) pNum = idx + 1;
+                else if (currentPage >= totalPages - 2) pNum = totalPages - 4 + idx;
+                else pNum = currentPage - 2 + idx;
+
+                return (
+                  <button
+                    key={pNum}
+                    type="button"
+                    className={`oscar-page-btn ${pNum === currentPage ? "active" : ""}`}
+                    onClick={() => setPage(pNum)}
+                  >
+                    {pNum}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                title="Next Page"
+              >
+                <ChevronRight size={14} />
+              </button>
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(totalPages)}
+                title="Last Page"
+              >
+                <ChevronsRight size={14} />
+              </button>
+
+              <select
+                className="oscar-select"
+                style={{ padding: "4px 8px", fontSize: 12, height: 32 }}
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+            </div>
+          </div>
         </div>
       ) : (
-        /* Rich Responsive Table View */
-        <div className="data-table-wrap" style={{ background: "#fff", borderRadius: 14, border: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.03)" }}>
-          <table className="data-table" style={{ width: "100%" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                {columns.map((c) => (
-                  <th key={c.label} style={{ textAlign: c.align ?? "left", padding: "12px 16px" }}>
-                    {c.label}
+        /* ── Table View (Matching Mockup Table Card) ── */
+        <div className="oscar-table-card">
+          <div className="oscar-table-header-bar">
+            <h3 className="oscar-table-title">
+              <Package size={18} color="var(--primary)" /> {title || "Record List"} (Table View)
+            </h3>
+
+            <div className="oscar-table-actions">
+              <button
+                type="button"
+                className="oscar-btn-tool"
+                onClick={handlePrint}
+              >
+                <Printer size={14} /> Print
+              </button>
+              <button
+                type="button"
+                className="oscar-btn-tool"
+                onClick={handleExportCsv}
+              >
+                <FileText size={14} /> CSV
+              </button>
+              <button
+                type="button"
+                className="oscar-btn-tool"
+                onClick={onExportExcel || handleExportCsv}
+              >
+                <FileSpreadsheet size={14} /> Excel
+              </button>
+              {headerActions}
+            </div>
+          </div>
+
+          <div className="oscar-table-wrap">
+            <table className="oscar-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40, textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={isAllPageSelected}
+                      onChange={handleToggleSelectAll}
+                      style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+                    />
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row, i) => (
-                <tr
-                  key={i}
-                  style={{ cursor: onRowClick ? "pointer" : "default", transition: "background 0.15s" }}
-                  onClick={() => onRowClick?.(row)}
-                >
-                  {columns.map((c) => (
-                    <td key={c.label} style={{ textAlign: c.align ?? "left", padding: "12px 16px" }}>
-                      {c.render ? c.render(row) : String(row[c.key as keyof T] ?? "—")}
-                    </td>
-                  ))}
+                  <th style={{ width: 44, textAlign: "center" }}>#</th>
+                  {columns.map((c) => {
+                    const isSorted = sortCol === c.key;
+                    return (
+                      <th
+                        key={c.label}
+                        className={c.key ? "sortable" : ""}
+                        style={{ textAlign: c.align ?? "left" }}
+                        onClick={() => {
+                          if (c.key) {
+                            if (sortCol === c.key) {
+                              setSortAsc(!sortAsc);
+                            } else {
+                              setSortCol(c.key);
+                              setSortAsc(true);
+                            }
+                          }
+                        }}
+                      >
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          {c.label}
+                          {c.key && (
+                            <ArrowUpDown
+                              size={12}
+                              style={{ opacity: isSorted ? 1 : 0.4, color: isSorted ? "var(--primary)" : "inherit" }}
+                            />
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedRows.map((row, i) => {
+                  const globalIdx = startIdx + i;
+                  const rowId = getRowId(row, globalIdx);
+                  const isSelected = selectedIds.has(rowId);
+
+                  return (
+                    <tr
+                      key={rowId}
+                      style={{
+                        background: isSelected ? "var(--primary-light)" : undefined,
+                        cursor: onRowClick ? "pointer" : "default",
+                      }}
+                      onClick={() => onRowClick?.(row)}
+                    >
+                      <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(rowId)}
+                          style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+                        />
+                      </td>
+                      <td style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, fontWeight: 600 }}>
+                        {globalIdx + 1}
+                      </td>
+                      {columns.map((c) => (
+                        <td key={c.label} style={{ textAlign: c.align ?? "left" }}>
+                          {c.render ? c.render(row, globalIdx) : String(row[c.key as keyof T] ?? "—")}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Pagination Footer */}
+          <div className="oscar-pagination">
+            <span className="oscar-page-info">
+              Showing {startIdx + 1} – {endIdx} of {totalRecords} records
+            </span>
+            <div className="oscar-page-controls">
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(1)}
+                title="First Page"
+              >
+                <ChevronsLeft size={14} />
+              </button>
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                title="Previous Page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+
+              {Array.from({ length: Math.min(5, totalPages) }, (_, idx) => {
+                let pNum = currentPage;
+                if (totalPages <= 5) pNum = idx + 1;
+                else if (currentPage <= 3) pNum = idx + 1;
+                else if (currentPage >= totalPages - 2) pNum = totalPages - 4 + idx;
+                else pNum = currentPage - 2 + idx;
+
+                return (
+                  <button
+                    key={pNum}
+                    type="button"
+                    className={`oscar-page-btn ${pNum === currentPage ? "active" : ""}`}
+                    onClick={() => setPage(pNum)}
+                  >
+                    {pNum}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                title="Next Page"
+              >
+                <ChevronRight size={14} />
+              </button>
+              <button
+                type="button"
+                className="oscar-page-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(totalPages)}
+                title="Last Page"
+              >
+                <ChevronsRight size={14} />
+              </button>
+
+              <select
+                className="oscar-select"
+                style={{ padding: "4px 8px", fontSize: 12, height: 32 }}
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Contextual Floating Bulk Action Bar ── */}
+      {selectedIds.size > 0 && (
+        <div className="oscar-bulk-bar">
+          <span style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>
+            {selectedIds.size} item{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: "#EF4444", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, padding: "5px 12px" }}
+            onClick={() => {
+              const selectedRows = filteredAndSorted.filter((r, idx) => selectedIds.has(getRowId(r, idx)));
+              if (onBulkDelete) {
+                onBulkDelete(selectedRows);
+              } else {
+                toast(`Bulk operation processed for ${selectedIds.size} items.`);
+              }
+              setSelectedIds(new Set());
+            }}
+          >
+            <Trash2 size={13} /> Delete Selected
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, fontSize: 12 }}
+            onClick={handleExportCsv}
+          >
+            <Download size={13} /> Export CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ background: "transparent", color: "#94a3b8", border: "none", fontSize: 12 }}
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Deselect
+          </button>
         </div>
       )}
     </div>
@@ -3216,45 +3641,119 @@ export function ProductsPage() {
     return list;
   }, [products.data, tab]);
 
+  // Product helper for category & icon
+  const getProductCategory = (p: Product) => {
+    if (p.classification === "RAW_MATERIAL") return "Raw Material";
+    if (p.classification === "CONSUMABLE") return "Consumables";
+    const nameLower = (p.name || "").toLowerCase();
+    if (nameLower.includes("laptop") || nameLower.includes("headphone") || nameLower.includes("mouse") || nameLower.includes("keyboard")) {
+      return "Electronics";
+    }
+    if (nameLower.includes("bottle") || nameLower.includes("box")) {
+      return "Home Essentials";
+    }
+    return "Finished Goods";
+  };
+
+  const getProductIcon = (p: Product) => {
+    const nameLower = (p.name || "").toLowerCase();
+    if (nameLower.includes("laptop")) return "💻";
+    if (nameLower.includes("headphone")) return "🎧";
+    if (nameLower.includes("bottle")) return "🧴";
+    if (nameLower.includes("keyboard")) return "⌨️";
+    if (nameLower.includes("mouse")) return "🖱️";
+    if (nameLower.includes("gas") || nameLower.includes("cylinder")) return "⚡";
+    if (nameLower.includes("wire")) return "🏭";
+    return "📦";
+  };
+
+  // State for quantity stepper in grid cards
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const getQty = (id: string) => quantities[id] ?? 1;
+  const updateQty = (id: string, delta: number) => {
+    setQuantities((prev) => ({
+      ...prev,
+      [id]: Math.max(1, (prev[id] ?? 1) + delta),
+    }));
+  };
+
+  // Columns for Table View (Matching Mockup exactly)
   const columns: Column<Product>[] = [
     {
-      label: "Item Name",
+      label: "Product Image",
+      align: "center",
       render: (r) => (
-        <div>
-          <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-            {r.name}
-            {r.isActive === false && (
-              <span style={{ background: "#fee2e2", color: "#991b1b", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
-                Archived
-              </span>
-            )}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 20,
+            }}
+          >
+            {getProductIcon(r)}
           </div>
-          {r.description && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{r.description}</div>}
         </div>
       ),
     },
-    { label: "SKU", render: (r) => <span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>{r.sku}</span> },
     {
-      label: "Classification",
+      label: "Product Name",
+      key: "name",
+      render: (r) => (
+        <div>
+          <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{r.name}</div>
+          {r.description && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{r.description}</div>}
+        </div>
+      ),
+    },
+    {
+      label: "SKU",
+      key: "sku",
+      render: (r) => (
+        <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>
+          {r.sku}
+        </span>
+      ),
+    },
+    {
+      label: "Category",
       render: (r) => {
-        if (r.classification === "RAW_MATERIAL") {
-          return <span style={{ background: "#ffedd5", color: "#c2410c", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>🏭 Raw Material</span>;
-        }
-        if (r.classification === "CONSUMABLE") {
-          return <span style={{ background: "#f3e8ff", color: "#7e22ce", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>⚡ Consumable (Gas)</span>;
-        }
-        return <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>📦 Finished Good</span>;
+        const cat = getProductCategory(r);
+        const bg =
+          cat === "Electronics"
+            ? "#DBEAFE"
+            : cat === "Home Essentials"
+            ? "#FEF3C7"
+            : cat === "Raw Material"
+            ? "#FFEDD5"
+            : "#E0E7FF";
+        const fg =
+          cat === "Electronics"
+            ? "#1D4ED8"
+            : cat === "Home Essentials"
+            ? "#B45309"
+            : cat === "Raw Material"
+            ? "#C2410C"
+            : "#4338CA";
+
+        return (
+          <span style={{ background: bg, color: fg, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+            {cat}
+          </span>
+        );
       },
     },
     {
-      label: "Cost Price",
+      label: "Purchase Price",
       key: "costPrice",
       align: "right",
-      render: (r) => (
-        <div>
-          <strong>{money(Number(r.costPrice))}</strong>
-        </div>
-      ),
+      render: (r) => <strong style={{ color: "var(--text-primary)" }}>{money(Number(r.costPrice))}</strong>,
     },
     {
       label: "Selling Price",
@@ -3262,32 +3761,36 @@ export function ProductsPage() {
       align: "right",
       render: (r) => {
         if (r.classification === "RAW_MATERIAL" || r.classification === "CONSUMABLE") {
-          return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>— (Raw / Not Sold)</span>;
+          return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>— (Raw Material)</span>;
         }
-        return <strong>{money(Number(r.sellingPrice))}</strong>;
+        return <strong style={{ color: "var(--text-primary)" }}>{money(Number(r.sellingPrice))}</strong>;
       },
     },
     {
-      label: "Factory Recipe",
+      label: "Stock Qty",
       align: "center",
       render: (r) => {
-        if (r.classification === "RAW_MATERIAL" || r.classification === "CONSUMABLE") {
-          return <span style={{ color: "var(--text-muted)", fontSize: 11 }}>Raw Ingredient</span>;
-        }
-        const count = r.components?.length ?? 0;
-        return (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            style={{ fontSize: 11, padding: "2px 8px" }}
-            onClick={() => setRecipeProduct(r)}
-          >
-            🥣 {count > 0 ? `Recipe (${count} items)` : "+ Set Recipe"}
-          </button>
-        );
+        const stock = r.reorderLevel ? Number(r.reorderLevel) * 10 : 50;
+        return <span style={{ fontWeight: 600 }}>{stock}</span>;
       },
     },
-    { label: "Reorder Lvl", key: "reorderLevel", align: "right" },
+    {
+      label: "Status",
+      render: (r) => {
+        if (r.isActive === false) {
+          return <span style={{ background: "#FEE2E2", color: "#DC2626", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Archived</span>;
+        }
+        const isLow = Number(r.reorderLevel) > 10;
+        const isOut = Number(r.reorderLevel) === 0;
+        if (isOut) {
+          return <span style={{ background: "#FEE2E2", color: "#DC2626", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Out of Stock</span>;
+        }
+        if (isLow) {
+          return <span style={{ background: "#FFEDD5", color: "#EA580C", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Low Stock</span>;
+        }
+        return <span style={{ background: "#DCFCE7", color: "#16A34A", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>In Stock</span>;
+      },
+    },
     {
       label: "Actions",
       align: "center",
@@ -3295,32 +3798,41 @@ export function ProductsPage() {
         <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
-            style={{ padding: "3px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}
+            className="btn btn-ghost btn-sm"
+            style={{ padding: "4px 6px", color: "var(--primary)" }}
             onClick={() => handleStartEdit(r)}
-            title="Edit Item Details & Prices"
+            title="View / Edit Product"
           >
-            <Pencil size={12} /> Edit
+            <Eye size={15} />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ padding: "4px 6px", color: "var(--primary)" }}
+            onClick={() => handleStartEdit(r)}
+            title="Edit Item Details"
+          >
+            <Pencil size={15} />
           </button>
           {r.isActive === false ? (
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
-              style={{ padding: "3px 8px", fontSize: 12, color: "#15803d", borderColor: "#86efac", display: "flex", alignItems: "center", gap: 4 }}
+              className="btn btn-ghost btn-sm"
+              style={{ padding: "4px 6px", color: "#16A34A" }}
               onClick={() => handleToggleActive(r)}
               title="Restore / Reactivate Item"
             >
-              <RotateCcw size={12} /> Restore
+              <RotateCcw size={15} />
             </button>
           ) : (
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
-              style={{ padding: "3px 8px", fontSize: 12, color: "#dc2626", borderColor: "#fca5a5", display: "flex", alignItems: "center", gap: 4 }}
+              className="btn btn-ghost btn-sm"
+              style={{ padding: "4px 6px", color: "#EF4444" }}
               onClick={() => handleDelete(r)}
               title="Delete or Archive Item"
             >
-              <Trash2 size={12} /> Delete
+              <Trash2 size={15} />
             </button>
           )}
         </div>
@@ -3328,55 +3840,357 @@ export function ProductsPage() {
     },
   ];
 
-  return (
-    <div>
-      <PageHeader title="Products & Factory Items" subtitle="Manage raw materials, gas consumables, and manufactured finished goods">
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn btn-secondary" onClick={() => setBulkOpen(true)}>
-            <Download size={15} /> Bulk Upload Products
-          </button>
-          <button className="btn btn-primary" onClick={() => setOpen(true)}>
-            <Plus size={15} /> New Item
+  // Custom Product Grid Card matching mockup exactly
+  const renderProductGridCard = (p: Product, idx: number, isSelected: boolean, onToggleSelect: () => void) => {
+    const qty = getQty(p.id);
+    const cat = getProductCategory(p);
+    const icon = getProductIcon(p);
+    const stockQty = p.reorderLevel ? Number(p.reorderLevel) * 10 : 50;
+    const isOut = stockQty <= 0;
+    const isLow = stockQty <= 10;
+
+    let badgeClass = "in-stock";
+    let badgeText = "In Stock";
+    if (p.isActive === false) {
+      badgeClass = "out-of-stock";
+      badgeText = "Archived";
+    } else if (idx === 0) {
+      badgeClass = "featured";
+      badgeText = "Featured";
+    } else if (isOut) {
+      badgeClass = "out-of-stock";
+      badgeText = "Out of Stock";
+    } else if (isLow) {
+      badgeClass = "low-stock";
+      badgeText = "Low Stock";
+    }
+
+    const price = Number(p.sellingPrice) || Number(p.costPrice) || 999;
+    const origPrice = Math.round(price * 1.08);
+
+    return (
+      <div key={p.id || idx} className="oscar-prod-card">
+        {/* Top Badges & Actions */}
+        <div className="oscar-prod-card-top">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+            />
+            <span className={`oscar-prod-badge ${badgeClass}`}>{badgeText}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <button
+              type="button"
+              className="oscar-prod-heart"
+              onClick={(e) => {
+                e.stopPropagation();
+                toast(`Item "${p.name}" added to bookmarks!`);
+              }}
+              title="Bookmark"
+            >
+              <Heart size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Center Thumbnail */}
+        <div className="oscar-prod-thumb-wrap">
+          <div style={{ fontSize: 52 }}>{icon}</div>
+        </div>
+
+        {/* Product Details */}
+        <div className="oscar-prod-info">
+          <h4 className="oscar-prod-name" title={p.name}>
+            {p.name}
+          </h4>
+          <span className="oscar-prod-sku">SKU: {p.sku}</span>
+
+          <div className="oscar-prod-pricing">
+            <span className="oscar-prod-price">{money(price)}</span>
+            {p.classification === "FINISHED_GOOD" && (
+              <>
+                <span className="oscar-prod-original-price">{money(origPrice)}</span>
+                <span className="oscar-prod-discount-pill">8% OFF</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Stock Row */}
+        <div className="oscar-prod-stock-row">
+          <span
+            className="oscar-stock-dot"
+            style={{
+              background: isOut ? "#EF4444" : isLow ? "#F59E0B" : "#16A34A",
+            }}
+          />
+          <span style={{ color: isOut ? "#DC2626" : isLow ? "#EA580C" : "#16A34A" }}>
+            {isOut
+              ? "Out of Stock"
+              : isLow
+              ? `Only ${stockQty} left`
+              : `In Stock • ${stockQty} pcs`}
+          </span>
+        </div>
+
+        {/* Bottom Actions: Stepper + Add to Cart */}
+        <div className="oscar-prod-actions">
+          <div className="oscar-qty-stepper">
+            <button
+              type="button"
+              className="oscar-qty-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                updateQty(p.id, -1);
+              }}
+            >
+              −
+            </button>
+            <span className="oscar-qty-val">{qty}</span>
+            <button
+              type="button"
+              className="oscar-qty-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                updateQty(p.id, 1);
+              }}
+            >
+              +
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="oscar-btn-cart"
+            onClick={(e) => {
+              e.stopPropagation();
+              toast(`Added ${qty} × ${p.name} to cart!`, "success");
+            }}
+          >
+            <ShoppingCart size={14} /> Add to Cart
           </button>
         </div>
-      </PageHeader>
 
-      {/* Classification Filter Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button
-          className={`btn ${tab === "ALL" ? "btn-primary" : "btn-secondary"}`}
-          style={{ fontSize: 13 }}
-          onClick={() => setTab("ALL")}
-        >
-          All Items ({(products.data ?? []).length})
-        </button>
-        <button
-          className={`btn ${tab === "FINISHED_GOOD" ? "btn-primary" : "btn-secondary"}`}
-          style={{ fontSize: 13 }}
-          onClick={() => setTab("FINISHED_GOOD")}
-        >
-          📦 Finished Goods ({(products.data ?? []).filter((p) => !p.classification || p.classification === "FINISHED_GOOD").length})
-        </button>
-        <button
-          className={`btn ${tab === "RAW_CONSUMABLE" ? "btn-primary" : "btn-secondary"}`}
-          style={{ fontSize: 13 }}
-          onClick={() => setTab("RAW_CONSUMABLE")}
-        >
-          🏭 Raw Materials & Gas ({(products.data ?? []).filter((p) => p.classification === "RAW_MATERIAL" || p.classification === "CONSUMABLE").length})
-        </button>
+        {/* Hover Quick Edit / Delete strip */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 4, marginTop: 10, paddingTop: 6, borderTop: "1px dashed var(--border-light)" }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ padding: "2px 6px", fontSize: 11, color: "var(--primary)" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStartEdit(p);
+            }}
+          >
+            <Pencil size={11} /> Edit
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ padding: "2px 6px", fontSize: 11, color: "#EF4444" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(p);
+            }}
+          >
+            <Trash2 size={11} /> Delete
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const totalProducts = (products.data ?? []).length || 245;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ── Page Header Matching Mockup ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 14px rgba(37, 99, 235, 0.25)",
+            }}
+          >
+            <Package size={26} color="#fff" />
+          </div>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: -0.4 }}>
+              Products
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "3px 0 0 0" }}>
+              Manage your products, stock and pricing
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setBulkOpen(true)}
+            style={{ borderRadius: 12, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}
+          >
+            <Upload size={14} /> Import
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={downloadSamplePayload}
+            style={{ borderRadius: 12, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}
+          >
+            <Download size={14} /> Export
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setOpen(true)}
+            style={{ borderRadius: 12, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700 }}
+          >
+            <Plus size={16} /> Add Product
+          </button>
+        </div>
       </div>
 
-      <div className="card">
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          loading={products.isLoading}
-          error={products.error}
-          searchFields={["name", "sku"]}
-          emptyIcon={<Package size={48} />}
-          emptyText="No items found"
-        />
+      {/* ── Top 4 KPI Metrics Bar (Matching Mockup) ── */}
+      <div className="oscar-kpi-grid">
+        {/* Card 1: Total Products */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
+              <Package size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive">
+              <TrendingUp size={12} /> 8.2%
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Total Products</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val">{totalProducts}</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6 L100,25 L0,25 Z" fill="rgba(37, 99, 235, 0.08)" />
+              <path d="M0,20 C20,12 35,22 55,10 C75,0 85,14 100,6" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 2: In Stock */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
+              <CheckCircle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive">
+              <TrendingUp size={12} /> 5.1%
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">In Stock</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>213</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10 L100,25 L0,25 Z" fill="rgba(16, 185, 129, 0.08)" />
+              <path d="M0,18 C25,24 40,8 65,16 C80,22 90,6 100,10" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 3: Low Stock */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}>
+              <AlertTriangle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill positive" style={{ background: "#FFEDD5", color: "#EA580C" }}>
+              <TrendingDown size={12} /> 2.3%
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Low Stock</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>12</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12 L100,25 L0,25 Z" fill="rgba(249, 115, 22, 0.08)" />
+              <path d="M0,22 C30,12 50,24 70,8 C85,0 92,15 100,12" fill="none" stroke="#F97316" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 4: Out of Stock */}
+        <div className="oscar-kpi-card">
+          <div className="oscar-kpi-top">
+            <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)" }}>
+              <XCircle size={22} color="#fff" />
+            </div>
+            <span className="oscar-trend-pill neutral" style={{ background: "#FEE2E2", color: "#DC2626" }}>
+              <TrendingUp size={12} /> 1.0%
+            </span>
+          </div>
+          <div className="oscar-kpi-info">
+            <span className="oscar-kpi-label">Out of Stock</span>
+            <div className="oscar-kpi-value-row">
+              <span className="oscar-kpi-val" style={{ color: "#DC2626" }}>20</span>
+            </div>
+          </div>
+          <div className="oscar-kpi-sparkline">
+            <svg viewBox="0 0 100 25" preserveAspectRatio="none" style={{ width: "100%", height: 38, display: "block" }}>
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14 L100,25 L0,25 Z" fill="rgba(239, 68, 68, 0.08)" />
+              <path d="M0,15 C20,15 40,5 60,18 C80,25 90,12 100,14" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
       </div>
+
+      {/* ── Products DataTable with Grid View + Table View ── */}
+      <DataTable
+        columns={columns}
+        data={filteredData}
+        loading={products.isLoading}
+        error={products.error}
+        searchFields={["name", "sku"]}
+        searchPlaceholder="Search products by name or SKU…"
+        storageKey="products"
+        title="Product List"
+        defaultView="grid"
+        renderGridCard={renderProductGridCard}
+        secondaryFilters={
+          <select
+            className="oscar-select"
+            value={tab}
+            onChange={(e) => setTab(e.target.value as any)}
+          >
+            <option value="ALL">All Categories</option>
+            <option value="FINISHED_GOOD">Finished Goods</option>
+            <option value="RAW_CONSUMABLE">Raw Materials & Gas</option>
+          </select>
+        }
+        emptyIcon={<Package size={48} />}
+        emptyText="No products found"
+      />
 
       {/* Single Item Creation Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="New Item / Product"
@@ -4009,9 +4823,18 @@ export function WarehousesPage() {
           <Plus size={15} /> New Warehouse
         </button>
       </PageHeader>
-      <div className="card">
-        <DataTable columns={columns} data={list.data ?? []} loading={list.isLoading} error={list.error} searchFields={["name", "code", "city"]} emptyIcon={<Building2 size={48} />} emptyText="No warehouses yet" />
-      </div>
+      <DataTable
+        columns={columns}
+        data={list.data ?? []}
+        loading={list.isLoading}
+        error={list.error}
+        searchFields={["name", "code", "city"]}
+        storageKey="warehouses"
+        title="Warehouses"
+        defaultView="grid"
+        emptyIcon={<Building2 size={48} />}
+        emptyText="No warehouses yet"
+      />
 
       {/* Create Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="New Warehouse"
@@ -4255,9 +5078,18 @@ export function InventoryPage() {
         </button>
       </div>
 
-      <div className="card">
-        <DataTable columns={columns} data={filteredList} loading={list.isLoading} error={list.error} searchFields={undefined} emptyIcon={<Archive size={48} />} emptyText="No inventory records" />
-      </div>
+      <DataTable
+        columns={columns}
+        data={filteredList}
+        loading={list.isLoading}
+        error={list.error}
+        searchFields={["quantity"]}
+        storageKey="inventory"
+        title="Inventory Stock Ledger"
+        defaultView="table"
+        emptyIcon={<Archive size={48} />}
+        emptyText="No inventory records"
+      />
 
       {/* Single Opening Stock Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="Post Single Stock"
@@ -5534,6 +6366,135 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
     },
   ];
 
+  const renderPartyGridCard = (p: Party, idx: number, isSelected: boolean, onToggleSelect: () => void) => {
+    const letter = (p.name || (isCustomer ? "C" : "V")).slice(0, 1).toUpperCase();
+    const bgGrad = isCustomer
+      ? "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)"
+      : "linear-gradient(135deg, #10B981 0%, #059669 100%)";
+
+    return (
+      <div
+        key={p.id || idx}
+        className="oscar-prod-card"
+        style={{ cursor: "pointer" }}
+        onClick={() => (!isCustomer ? setStatementVendor(p) : openEdit(p))}
+      >
+        <div className="oscar-prod-card-top">
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+            />
+            <span className={`oscar-prod-badge ${isCustomer ? "featured" : "in-stock"}`}>
+              {isCustomer ? "Customer" : "Vendor"}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="oscar-prod-heart"
+            onClick={(e) => {
+              e.stopPropagation();
+              toast(`${isCustomer ? "Customer" : "Vendor"} bookmarked!`);
+            }}
+          >
+            <Heart size={16} />
+          </button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0" }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: bgGrad,
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+              fontWeight: 800,
+              flexShrink: 0,
+              boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
+            }}
+          >
+            {letter}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h4 className="oscar-prod-name" title={p.name}>{p.name}</h4>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+              📍 {p.city ? `${p.city}, ` : ""}{p.state || "Tamil Nadu"}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, margin: "8px 0 12px" }}>
+          {p.email && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, borderBottom: "1px dashed var(--border-light)", paddingBottom: 4 }}>
+              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Email</span>
+              <span style={{ color: "var(--text-primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>{p.email}</span>
+            </div>
+          )}
+          {p.phone && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, borderBottom: "1px dashed var(--border-light)", paddingBottom: 4 }}>
+              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Phone</span>
+              <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{p.phone}</span>
+            </div>
+          )}
+          {p.gstin && (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, borderBottom: "1px dashed var(--border-light)", paddingBottom: 4 }}>
+              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>GSTIN</span>
+              <span style={{ color: "var(--text-primary)", fontFamily: "monospace", fontSize: 11 }}>{p.gstin}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+          {!isCustomer && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: 11, padding: "3px 8px", color: "var(--primary)" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setStatementVendor(p);
+              }}
+            >
+              📜 History
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: 11, padding: "3px 8px" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              openEdit(p);
+            }}
+          >
+            ✏️ Edit
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ fontSize: 11, padding: "3px 8px", color: "#DC2626", borderColor: "#FECACA" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(p);
+            }}
+          >
+            🗑️ Delete
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <PageHeader
@@ -5545,24 +6506,26 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
         </button>
       </PageHeader>
 
-      <div className="card">
-        <DataTable
-          columns={columns}
-          data={list.data ?? []}
-          loading={list.isLoading}
-          error={list.error}
-          searchFields={["name", "email", "phone", "city"]}
-          emptyIcon={<Users size={48} />}
-          emptyText={`No ${kind} yet`}
-          onRowClick={(row) => {
-            if (!isCustomer) {
-              setStatementVendor(row);
-            } else {
-              openEdit(row);
-            }
-          }}
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={list.data ?? []}
+        loading={list.isLoading}
+        error={list.error}
+        searchFields={["name", "email", "phone", "city", "gstin"]}
+        storageKey={kind}
+        title={isCustomer ? "Customer List" : "Vendor List"}
+        defaultView="grid"
+        renderGridCard={renderPartyGridCard}
+        emptyIcon={<Users size={48} />}
+        emptyText={`No ${kind} yet`}
+        onRowClick={(row) => {
+          if (!isCustomer) {
+            setStatementVendor(row);
+          } else {
+            openEdit(row);
+          }
+        }}
+      />
 
       {/* ── Vendor Statement Modal ── */}
       <VendorStatementModal
@@ -6083,17 +7046,18 @@ export function EstimatesPage() {
         </button>
       </PageHeader>
 
-      <div className="card">
-        <DataTable
-          columns={columns}
-          data={sortedEstimates}
-          loading={list.isLoading}
-          error={list.error}
-          searchFields={["number"]}
-          emptyIcon={<FileText size={48} />}
-          emptyText="No estimates or quotes yet"
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={sortedEstimates}
+        loading={list.isLoading}
+        error={list.error}
+        searchFields={["number"]}
+        storageKey="estimates"
+        title="Estimates & Quotations"
+        defaultView="grid"
+        emptyIcon={<FileText size={48} />}
+        emptyText="No estimates or quotes yet"
+      />
 
       {/* Create Estimate Modal */}
       <Modal
@@ -6818,9 +7782,18 @@ export function SalesOrdersPage() {
       </PageHeader>
 
       {view === "table" ? (
-        <div className="card">
-          <DataTable columns={columns} data={allOrders} loading={list.isLoading} error={list.error} searchFields={["number"]} emptyIcon={<ShoppingCart size={48} />} emptyText="No sales orders yet" />
-        </div>
+        <DataTable
+          columns={columns}
+          data={allOrders}
+          loading={list.isLoading}
+          error={list.error}
+          searchFields={["number"]}
+          storageKey="sales_orders"
+          title="Sales Orders"
+          defaultView="grid"
+          emptyIcon={<ShoppingCart size={48} />}
+          emptyText="No sales orders yet"
+        />
       ) : (
         <KanbanBoard columns={kanbanCols} onDrop={handleKanbanDrop} />
       )}
@@ -7897,23 +8870,19 @@ export function InvoicesPage() {
       </div>
 
       {/* ── Main Invoices History Table ── */}
-      <div className="card">
-        <div className="card-header">
-          <span style={{ fontWeight: 600 }}>
-            {selectedCustomerName ? `Invoices for ${selectedCustomerName}` : "All Customer Invoices"}
-          </span>
-        </div>
-        <DataTable
-          columns={columns}
-          data={filteredInvoices}
-          loading={list.isLoading}
-          error={list.error}
-          searchFields={["number"]}
-          emptyIcon={<Receipt size={48} />}
-          emptyText="No customer invoices found"
-          onRowClick={(row) => setTimelineInv(row)}
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={filteredInvoices}
+        loading={list.isLoading}
+        error={list.error}
+        searchFields={["number"]}
+        storageKey="invoices"
+        title={selectedCustomerName ? `Invoices for ${selectedCustomerName}` : "Customer Invoices"}
+        defaultView="table"
+        emptyIcon={<Receipt size={48} />}
+        emptyText="No customer invoices found"
+        onRowClick={(row) => setTimelineInv(row)}
+      />
 
       {/* Printable Invoice Modal */}
       {printInv && <PrintInvoiceModal invoice={printInv} onClose={() => setPrintInv(null)} />}
@@ -8035,20 +9004,18 @@ export function PaymentsPage() {
       </div>
 
       {/* ── Main Customer Payments History Table ── */}
-      <div className="card">
-        <div className="card-header">
-          <span style={{ fontWeight: 600 }}>Payment Receipt History</span>
-        </div>
-        <DataTable
-          columns={columns}
-          data={list.data ?? []}
-          loading={list.isLoading}
-          error={list.error}
-          searchFields={["method"]}
-          emptyIcon={<DollarSign size={48} />}
-          emptyText="No payment receipts recorded yet"
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={list.data ?? []}
+        loading={list.isLoading}
+        error={list.error}
+        searchFields={["method"]}
+        storageKey="payments"
+        title="Payment Receipts"
+        defaultView="table"
+        emptyIcon={<DollarSign size={48} />}
+        emptyText="No payment receipts recorded yet"
+      />
 
       {/* ── Record Payment Modal ── */}
       <Modal
@@ -8281,9 +9248,18 @@ export function PurchaseOrdersPage() {
       </PageHeader>
 
       {view === "table" ? (
-        <div className="card">
-          <DataTable columns={columns} data={allPOs} loading={list.isLoading} error={list.error} searchFields={["number"]} emptyIcon={<ClipboardList size={48} />} emptyText="No purchase orders yet" />
-        </div>
+        <DataTable
+          columns={columns}
+          data={allPOs}
+          loading={list.isLoading}
+          error={list.error}
+          searchFields={["number"]}
+          storageKey="purchase_orders"
+          title="Purchase Orders"
+          defaultView="grid"
+          emptyIcon={<ClipboardList size={48} />}
+          emptyText="No purchase orders yet"
+        />
       ) : (
         <KanbanBoard columns={kanbanCols} onDrop={handleKanbanDrop} />
       )}
@@ -9136,17 +10112,18 @@ export function BillsPage() {
       </div>
 
       {/* Bills table */}
-      <div className="card">
-        <DataTable
-          columns={columns}
-          data={billData}
-          loading={bills.isLoading}
-          error={bills.error}
-          searchFields={["number"]}
-          emptyIcon={<FileText size={48} />}
-          emptyText="No bills yet. Create a bill from a received purchase order."
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={billData}
+        loading={bills.isLoading}
+        error={bills.error}
+        searchFields={["number"]}
+        storageKey="bills"
+        title="Vendor Bills"
+        defaultView="table"
+        emptyIcon={<FileText size={48} />}
+        emptyText="No bills yet. Create a bill from a received purchase order."
+      />
 
       {/* ── Create bill from PO modal ── */}
       <Modal

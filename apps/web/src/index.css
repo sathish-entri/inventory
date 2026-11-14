@@ -1961,3 +1961,488 @@ select.input-field { cursor: pointer; }
   background: rgba(91, 155, 248, 0.3);
   color: #ffffff;
 }
+
+/* ── Oscar v2.0 ViewSwitcher & Toolbar ────────────────────────── */
+.view-switcher-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  gap: 4px;
+}
+.view-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.view-switcher-btn:hover {
+  color: var(--text-primary);
+  background: rgba(0,0,0,0.03);
+}
+.view-switcher-btn.active {
+  background: linear-gradient(135deg, #5146E5 0%, #6366F1 100%);
+  color: #FFFFFF !important;
+  box-shadow: 0 3px 10px rgba(81, 70, 229, 0.35);
+}
+
+/* Toolbar Bar */
+.oscar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px 18px;
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+.oscar-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.oscar-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.oscar-select {
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.oscar-select:focus {
+  border-color: var(--primary);
+}
+
+.oscar-search-box {
+  position: relative;
+  min-width: 220px;
+}
+.oscar-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: all var(--transition);
+}
+.oscar-search-input:focus {
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(81, 70, 229, 0.12);
+}
+
+/* ── Oscar Product Grid Cards ─────────────────────────────────── */
+.oscar-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+@media (min-width: 1400px) {
+  .oscar-product-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+@media (min-width: 1100px) and (max-width: 1399px) {
+  .oscar-product-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (min-width: 768px) and (max-width: 1099px) {
+  .oscar-product-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .oscar-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
+
+.oscar-prod-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+.oscar-prod-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px -4px rgba(16, 24, 40, 0.08);
+  border-color: #cbd5e1;
+}
+
+.oscar-prod-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.oscar-prod-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  text-transform: capitalize;
+}
+.oscar-prod-badge.in-stock {
+  background: #DCFCE7;
+  color: #16A34A;
+}
+.oscar-prod-badge.low-stock {
+  background: #FFEDD5;
+  color: #EA580C;
+}
+.oscar-prod-badge.out-of-stock {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+.oscar-prod-badge.featured {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.oscar-prod-heart {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition), transform var(--transition);
+}
+.oscar-prod-heart:hover {
+  color: #EF4444;
+  transform: scale(1.15);
+}
+
+.oscar-prod-thumb-wrap {
+  width: 100%;
+  height: 140px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+}
+
+.oscar-prod-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.oscar-prod-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oscar-prod-sku {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.oscar-prod-pricing {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+}
+.oscar-prod-price {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.oscar-prod-original-price {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.oscar-prod-discount-pill {
+  font-size: 10px;
+  font-weight: 700;
+  background: #DCFCE7;
+  color: #16A34A;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.oscar-prod-stock-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.oscar-stock-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.oscar-prod-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oscar-qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.oscar-qty-btn {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.oscar-qty-btn:hover {
+  background: rgba(0,0,0,0.06);
+}
+.oscar-qty-val {
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.oscar-btn-cart {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #5146E5 0%, #4338CA 100%);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(81, 70, 229, 0.28);
+  transition: all var(--transition);
+}
+.oscar-btn-cart:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(81, 70, 229, 0.4);
+}
+
+/* ── Oscar Table View ─────────────────────────────────────────── */
+.oscar-table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.oscar-table-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.oscar-table-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.oscar-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.oscar-btn-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.oscar-btn-tool:hover {
+  background: var(--surface-hover);
+  border-color: #cbd5e1;
+}
+
+.oscar-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+.oscar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.oscar-table thead tr {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.oscar-table th {
+  padding: 12px 16px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  text-align: left;
+  white-space: nowrap;
+}
+.oscar-table th.sortable {
+  cursor: pointer;
+}
+.oscar-table th.sortable:hover {
+  color: var(--text-primary);
+}
+.oscar-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.oscar-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+.oscar-table td {
+  padding: 12px 16px;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+/* Pagination Bar */
+.oscar-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.oscar-page-info {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.oscar-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.oscar-page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+.oscar-page-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: #cbd5e1;
+}
+.oscar-page-btn.active {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+  box-shadow: 0 2px 6px rgba(81, 70, 229, 0.35);
+}
+.oscar-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Floating Bulk Action Bar */
+.oscar-bulk-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: #fff;
+  border-radius: 16px;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  z-index: 100;
+  animation: slide-up 200ms ease;
+}
