@@ -1415,17 +1415,17 @@ function DataTable<T extends Record<string, unknown>>({
   const [q, setQ] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "grid">(() => {
     try {
-      const saved = localStorage.getItem("preferred_view_mode");
+      const saved = localStorage.getItem("app_view_mode_pref");
       if (saved === "table" || saved === "grid") return saved;
     } catch {}
-    return typeof window !== "undefined" && window.innerWidth <= 768 ? "grid" : "table";
+    return "grid";
   });
   const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
 
   const setAndSaveViewMode = (mode: "table" | "grid") => {
     setViewMode(mode);
     try {
-      localStorage.setItem("preferred_view_mode", mode);
+      localStorage.setItem("app_view_mode_pref", mode);
     } catch {}
   };
 
