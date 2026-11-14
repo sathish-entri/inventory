@@ -585,6 +585,7 @@ type SearchableSelectProps = {
   onQuickCreate?: () => void;
   quickCreateLabel?: string;
   manageUrl?: string;
+  disabled?: boolean;
 };
 export function SearchableSelect({
   options,
@@ -594,6 +595,7 @@ export function SearchableSelect({
   onQuickCreate,
   quickCreateLabel,
   manageUrl,
+  disabled,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -627,10 +629,14 @@ export function SearchableSelect({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          cursor: "pointer",
-          background: "#fff",
+          cursor: disabled ? "not-allowed" : "pointer",
+          background: disabled ? "#f8fafc" : "#fff",
+          opacity: disabled ? 0.75 : 1,
+          borderColor: disabled ? "#cbd5e1" : undefined,
         }}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!disabled) setOpen(!open);
+        }}
       >
         <span style={{ color: selectedOpt ? "var(--text-primary)" : "var(--text-muted)" }}>
           {selectedOpt ? selectedOpt.label : placeholder}
@@ -1283,6 +1289,7 @@ export function SmartEntitySelect({
   value,
   onChange,
   placeholder,
+  disabled,
 }: {
   label: string;
   entity: "warehouse" | "customer" | "vendor" | "product";
@@ -1290,6 +1297,7 @@ export function SmartEntitySelect({
   value: string;
   onChange: (val: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -1321,15 +1329,17 @@ export function SmartEntitySelect({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <label className="input-label" style={{ margin: 0 }}>{label}</label>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            style={{ fontSize: 11, padding: "1px 6px", color: "var(--accent)", fontWeight: 700 }}
-            onClick={() => setModalOpen(true)}
-            title={`Quickly create a new ${entityConfig.title} without leaving this form`}
-          >
-            ⚡ {entityConfig.createLabel}
-          </button>
+          {!disabled && (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              style={{ fontSize: 11, padding: "1px 6px", color: "var(--accent)", fontWeight: 700 }}
+              onClick={() => setModalOpen(true)}
+              title={`Quickly create a new ${entityConfig.title} without leaving this form`}
+            >
+              ⚡ {entityConfig.createLabel}
+            </button>
+          )}
           <a
             href={entityConfig.manageUrl}
             target="_blank"
@@ -1350,6 +1360,7 @@ export function SmartEntitySelect({
         onQuickCreate={() => setModalOpen(true)}
         quickCreateLabel={entityConfig.createLabel}
         manageUrl={entityConfig.manageUrl}
+        disabled={disabled}
       />
 
       {entity === "warehouse" && (
@@ -5872,12 +5883,19 @@ type Adjustment = { id: string; reason: string; quantityDelta: string; createdAt
 
 export function AdjustmentsPage() {
   const list = useList<Adjustment>("adj", "/inventory/adjustments");
-  const products = useList<{ id: string; name: string }>("products", "/products");
+  const products = useList<{ id: string; name: string; stocks?: any[] }>("products", "/products");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ productId: "", warehouseId: "", quantityDelta: "1", reason: "Cycle count" });
+
+  // Auto-select warehouse if account only has 1 warehouse
+  useEffect(() => {
+    if (!form.warehouseId && warehouses.data && warehouses.data.length === 1) {
+      setForm((p) => ({ ...p, warehouseId: warehouses.data[0].id }));
+    }
+  }, [warehouses.data, form.warehouseId]);
 
   const create = useMutation({
     mutationFn: () => api.post("/inventory/adjustments", { productId: form.productId, warehouseId: form.warehouseId, quantityDelta: Number(form.quantityDelta), reason: form.reason }),
@@ -5914,20 +5932,29 @@ export function AdjustmentsPage() {
       >
         <div className="form-grid form-grid-2">
           <SmartEntitySelect
-            label="Item *"
-            entity="product"
-            placeholder="Select item…"
-            value={form.productId}
-            onChange={(val) => setForm({ ...form, productId: val })}
-            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
-          />
-          <SmartEntitySelect
             label="Warehouse *"
             entity="warehouse"
             placeholder="Select warehouse…"
             value={form.warehouseId}
-            onChange={(val) => setForm({ ...form, warehouseId: val })}
+            onChange={(val) => setForm({ ...form, warehouseId: val, productId: "" })}
             options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+          />
+          <SmartEntitySelect
+            label="Item *"
+            entity="product"
+            placeholder={!form.warehouseId ? "⚠️ Select warehouse first…" : "Select item…"}
+            disabled={!form.warehouseId}
+            value={form.productId}
+            onChange={(val) => setForm({ ...form, productId: val })}
+            options={
+              !form.warehouseId
+                ? []
+                : (products.data ?? []).map((p) => {
+                    const st = p.stocks?.find((s: any) => s.warehouseId === form.warehouseId);
+                    const qty = st !== undefined ? Number(st.quantity || 0) : 0;
+                    return { value: p.id, label: `${p.name} (Current Stock: ${qty})` };
+                  })
+            }
           />
           <InputGroup label="Quantity Delta (+/-)">
             <NumberStepper
@@ -5954,7 +5981,7 @@ type Transfer = { id: string; number: string; fromWarehouseId: string; toWarehou
 export function TransfersPage() {
   const list = useList<Transfer>("trf", "/inventory/transfers");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
-  const products = useList<{ id: string; name: string }>("products", "/products");
+  const products = useList<{ id: string; name: string; stocks?: any[] }>("products", "/products");
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -6000,7 +6027,7 @@ export function TransfersPage() {
             entity="warehouse"
             placeholder="Select source warehouse…"
             value={form.fromWarehouseId}
-            onChange={(val) => setForm({ ...form, fromWarehouseId: val })}
+            onChange={(val) => setForm({ ...form, fromWarehouseId: val, productId: "" })}
             options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
           />
           <SmartEntitySelect
@@ -6009,15 +6036,26 @@ export function TransfersPage() {
             placeholder="Select destination warehouse…"
             value={form.toWarehouseId}
             onChange={(val) => setForm({ ...form, toWarehouseId: val })}
-            options={(warehouses.data ?? []).map((w) => ({ value: w.id, label: w.name }))}
+            options={(warehouses.data ?? [])
+              .filter((w) => w.id !== form.fromWarehouseId)
+              .map((w) => ({ value: w.id, label: w.name }))}
           />
           <SmartEntitySelect
             label="Item *"
             entity="product"
-            placeholder="Select item…"
+            placeholder={!form.fromWarehouseId ? "⚠️ Select source warehouse first…" : "Select item…"}
+            disabled={!form.fromWarehouseId}
             value={form.productId}
             onChange={(val) => setForm({ ...form, productId: val })}
-            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+            options={
+              !form.fromWarehouseId
+                ? []
+                : (products.data ?? []).map((p) => {
+                    const st = p.stocks?.find((s: any) => s.warehouseId === form.fromWarehouseId);
+                    const qty = st !== undefined ? Number(st.quantity || 0) : 0;
+                    return { value: p.id, label: `${p.name} (Stock: ${qty})` };
+                  })
+            }
           />
           <InputGroup label="Quantity">
             <NumberStepper
@@ -7649,7 +7687,10 @@ export function EstimatesPage() {
   const list = useList<Estimate>("estimates", "/estimates");
   const customers = useList<{ id: string; name: string; state?: string }>("customers", "/customers");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
-  const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number }>("products", "/products");
+  const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number; classification?: string; stocks?: any[] }>(
+    "products-estimates",
+    "/products?classification=FINISHED_GOOD"
+  );
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -7658,6 +7699,13 @@ export function EstimatesPage() {
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
   const [printEstimate, setPrintEstimate] = useState<Estimate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Estimate | null>(null);
+
+  // Auto-select warehouse if account only has 1 warehouse
+  useEffect(() => {
+    if (!form.warehouseId && warehouses.data && warehouses.data.length === 1) {
+      setForm((p) => ({ ...p, warehouseId: warehouses.data[0].id }));
+    }
+  }, [warehouses.data, form.warehouseId]);
 
   const removeEstimate = useMutation({
     mutationFn: (id: string) => api.delete(`/estimates/${id}`),
@@ -7866,7 +7914,7 @@ export function EstimatesPage() {
           />
         </div>
 
-        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
+        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} warehouseId={form.warehouseId} />
       </Modal>
 
       {/* Printable / Shareable Estimate PDF Modal */}
@@ -7925,16 +7973,28 @@ export function LineItemBuilder({
   products,
   mode = "selling",
   customerState,
+  warehouseId,
 }: {
   lines: LineItem[];
   onChange: (lines: LineItem[]) => void;
-  products: { id: string; name: string; sellingPrice?: number; costPrice?: number; taxRate?: number }[];
+  products: { id: string; name: string; sellingPrice?: number; costPrice?: number; taxRate?: number; classification?: string; stocks?: any[] }[];
   mode?: "selling" | "purchasing";
   customerState?: string;
+  warehouseId?: string;
 }) {
   const [quickProductIdx, setQuickProductIdx] = useState<number | null>(null);
   const stateStr = (customerState || "").toLowerCase().trim();
   const isTN = !stateStr || stateStr.includes("tamil") || stateStr.includes("tn") || stateStr.startsWith("33");
+
+  // Filter products by mode:
+  // Purchasing (PO / Bills): Strictly RAW_MATERIAL and CONSUMABLE items. Never show FINISHED_GOOD!
+  // Selling (SO / Estimates / Invoices): Strictly FINISHED_GOOD (or unclassified). Never show RAW_MATERIAL!
+  const filteredProducts = products.filter((p) => {
+    if (mode === "purchasing") {
+      return p.classification === "RAW_MATERIAL" || p.classification === "CONSUMABLE";
+    }
+    return !p.classification || p.classification === "FINISHED_GOOD";
+  });
 
   const addLine = () => {
     onChange([...lines, { productId: "", quantity: 1, unitPrice: 0, taxRate: 18, description: "" }]);
@@ -7997,6 +8057,30 @@ export function LineItemBuilder({
           {isTN ? "SGST (9%) + CGST (9%) = 18% GST" : "IGST (18% Static)"}
         </div>
       </div>
+
+      {/* ── Live Warehouse Requirement Warning Banner ── */}
+      {!warehouseId && (
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "#fffbeb",
+            border: "1.5px dashed #f59e0b",
+            borderRadius: 8,
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 12,
+            color: "#b45309",
+            fontWeight: 600,
+          }}
+        >
+          <AlertTriangle size={16} color="#d97706" style={{ flexShrink: 0 }} />
+          <span>
+            ⚠️ Please select a <strong>{mode === "purchasing" ? "Receiving Warehouse" : "Dispatch Warehouse"}</strong> above before selecting items. Item lists and warehouse inventory stock depend on the selected warehouse.
+          </span>
+        </div>
+      )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
@@ -8061,31 +8145,52 @@ export function LineItemBuilder({
                 </div>
                 <select
                   className="input-field"
-                  style={{ fontSize: 13, padding: "6px 8px" }}
+                  style={{
+                    fontSize: 13,
+                    padding: "6px 8px",
+                    background: !warehouseId ? "#fffbeb" : "#ffffff",
+                    borderColor: !warehouseId ? "#f59e0b" : undefined,
+                    cursor: !warehouseId ? "not-allowed" : "pointer",
+                    color: !warehouseId ? "#b45309" : "var(--text-primary)",
+                  }}
+                  disabled={!warehouseId}
                   value={line.productId}
                   onChange={(e) => updateLine(idx, "productId", e.target.value)}
                 >
-                  <option value="">Select item…</option>
-                  {products
-                    .slice()
-                    .sort((a: any, b: any) => {
-                      if (mode === "selling") {
-                        if (a.classification === "FINISHED_GOOD" && b.classification !== "FINISHED_GOOD") return -1;
-                        if (b.classification === "FINISHED_GOOD" && a.classification !== "FINISHED_GOOD") return 1;
-                      } else {
-                        if (a.classification !== "FINISHED_GOOD" && b.classification === "FINISHED_GOOD") return -1;
-                        if (b.classification !== "FINISHED_GOOD" && a.classification === "FINISHED_GOOD") return 1;
-                      }
-                      return (a.name || "").localeCompare(b.name || "");
-                    })
-                    .map((p: any) => {
-                      const tag = p.classification === "FINISHED_GOOD" ? "📦 [Finished Good]" : p.classification === "CONSUMABLE" ? "⚡ [Consumable]" : "🏭 [Raw Material]";
-                      return (
-                        <option key={p.id} value={p.id}>
-                          {tag} {p.name}
+                  {!warehouseId ? (
+                    <option value="">⚠️ Select {mode === "purchasing" ? "Receiving" : "Dispatch"} Warehouse first…</option>
+                  ) : (
+                    <>
+                      <option value="">Select item…</option>
+                      {filteredProducts.length === 0 ? (
+                        <option value="" disabled>
+                          {mode === "purchasing"
+                            ? "⚠️ No Raw Materials / Consumables found"
+                            : "⚠️ No Finished Goods found"}
                         </option>
-                      );
-                    })}
+                      ) : (
+                        filteredProducts
+                          .slice()
+                          .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
+                          .map((p: any) => {
+                            const whStock = p.stocks?.find((s: any) => s.warehouseId === warehouseId);
+                            const stockCount = whStock !== undefined ? Number(whStock.quantity || 0) : null;
+                            const stockLabel = stockCount !== null ? ` (Stock: ${stockCount})` : "";
+                            const tag =
+                              p.classification === "FINISHED_GOOD"
+                                ? "📦 [Finished Good]"
+                                : p.classification === "CONSUMABLE"
+                                ? "⚡ [Consumable]"
+                                : "🏭 [Raw Material]";
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {tag} {p.name}{stockLabel}
+                              </option>
+                            );
+                          })
+                      )}
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -8365,7 +8470,10 @@ export function SalesOrdersPage() {
   const list = useList<SalesOrder>("so", "/sales-orders");
   const customers = useList<{ id: string; name: string; state?: string }>("customers", "/customers");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
-  const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number }>("products", "/products");
+  const products = useList<{ id: string; name: string; sellingPrice?: number; taxRate?: number; classification?: string; stocks?: any[] }>(
+    "products-so",
+    "/products?classification=FINISHED_GOOD"
+  );
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -8374,6 +8482,13 @@ export function SalesOrdersPage() {
   const [form, setForm] = useState({ customerId: "", warehouseId: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
   const [deleteTarget, setDeleteTarget] = useState<SalesOrder | null>(null);
+
+  // Auto-select warehouse if account only has 1 warehouse
+  useEffect(() => {
+    if (!form.warehouseId && warehouses.data && warehouses.data.length === 1) {
+      setForm((p) => ({ ...p, warehouseId: warehouses.data[0].id }));
+    }
+  }, [warehouses.data, form.warehouseId]);
 
   const removeSO = useMutation({
     mutationFn: (id: string) => api.delete(`/sales-orders/${id}`),
@@ -8925,7 +9040,7 @@ export function SalesOrdersPage() {
           />
         </div>
 
-        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
+        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} warehouseId={form.warehouseId} />
       </Modal>
 
       {/* Delete Confirmation Modal */}
@@ -10435,7 +10550,10 @@ export function PurchaseOrdersPage() {
   const list = useList<PurchaseOrder>("po", "/purchase-orders");
   const vendors = useList<{ id: string; name: string }>("vendors", "/vendors");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
-  const products = useList<{ id: string; name: string; costPrice?: number; taxRate?: number }>("products", "/products");
+  const products = useList<{ id: string; name: string; costPrice?: number; taxRate?: number; classification?: string; stocks?: any[] }>(
+    "products-po",
+    "/products?classification=RAW_MATERIAL,CONSUMABLE"
+  );
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -10444,6 +10562,13 @@ export function PurchaseOrdersPage() {
   const [form, setForm] = useState({ vendorId: "", warehouseId: "", number: "", notes: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
   const [deleteTarget, setDeleteTarget] = useState<PurchaseOrder | null>(null);
+
+  // Auto-select warehouse if account only has 1 warehouse
+  useEffect(() => {
+    if (!form.warehouseId && warehouses.data && warehouses.data.length === 1) {
+      setForm((p) => ({ ...p, warehouseId: warehouses.data[0].id }));
+    }
+  }, [warehouses.data, form.warehouseId]);
 
   const removePO = useMutation({
     mutationFn: (id: string) => api.delete(`/purchase-orders/${id}`),
@@ -10858,7 +10983,7 @@ export function PurchaseOrdersPage() {
           />
         </div>
 
-        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="purchasing" />
+        <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="purchasing" warehouseId={form.warehouseId} />
 
         {(!vendors.data?.length || !warehouses.data?.length || !products.data?.length) && (
           <div style={{ marginTop: 12, padding: "10px 14px", background: "#fef3c7", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
@@ -10920,7 +11045,7 @@ export function SalesReturnsPage() {
   const list = useList<SalesReturnRow>("sales-returns", "/sales-returns");
   const customers = useList<{ id: string; name: string }>("customers", "/customers");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
-  const products = useList<{ id: string; name: string }>("products", "/products");
+  const products = useList<{ id: string; name: string; stocks?: any[] }>("products-sales-returns", "/products?classification=FINISHED_GOOD");
   const salesOrders = useList<{ id: string; number: string }>("so", "/sales-orders");
 
   const qc = useQueryClient();
@@ -10934,6 +11059,13 @@ export function SalesReturnsPage() {
     quantity: "1",
     reason: "",
   });
+
+  // Auto-select warehouse if account only has 1 warehouse
+  useEffect(() => {
+    if (!form.warehouseId && warehouses.data && warehouses.data.length === 1) {
+      setForm((p) => ({ ...p, warehouseId: warehouses.data[0].id }));
+    }
+  }, [warehouses.data, form.warehouseId]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -11055,9 +11187,10 @@ export function SalesReturnsPage() {
             <select
               className="input-field"
               value={form.productId}
+              disabled={!form.warehouseId}
               onChange={(e) => setForm({ ...form, productId: e.target.value })}
             >
-              <option value="">Select item…</option>
+              <option value="">{!form.warehouseId ? "⚠️ Select warehouse first…" : "Select item…"}</option>
               {(products.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -11107,7 +11240,7 @@ export function PurchaseReturnsPage() {
   const list = useList<PurchaseReturnRow>("purchase-returns", "/purchase-returns");
   const vendors = useList<{ id: string; name: string }>("vendors", "/vendors");
   const warehouses = useList<{ id: string; name: string }>("wh", "/warehouses");
-  const products = useList<{ id: string; name: string }>("products", "/products");
+  const products = useList<{ id: string; name: string; stocks?: any[] }>("products-pr", "/products?classification=RAW_MATERIAL,CONSUMABLE");
   const pos = useList<{ id: string; number: string }>("po", "/purchase-orders");
 
   const qc = useQueryClient();
@@ -11121,6 +11254,13 @@ export function PurchaseReturnsPage() {
     quantity: "1",
     reason: "",
   });
+
+  // Auto-select warehouse if account only has 1 warehouse
+  useEffect(() => {
+    if (!form.warehouseId && warehouses.data && warehouses.data.length === 1) {
+      setForm((p) => ({ ...p, warehouseId: warehouses.data[0].id }));
+    }
+  }, [warehouses.data, form.warehouseId]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -11229,10 +11369,19 @@ export function PurchaseReturnsPage() {
           <SmartEntitySelect
             label="Item to Return *"
             entity="product"
-            placeholder="Select item…"
+            placeholder={!form.warehouseId ? "⚠️ Select warehouse first…" : "Select item…"}
+            disabled={!form.warehouseId}
             value={form.productId}
             onChange={(val) => setForm({ ...form, productId: val })}
-            options={(products.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+            options={
+              !form.warehouseId
+                ? []
+                : (products.data ?? []).map((p) => {
+                    const st = p.stocks?.find((s: any) => s.warehouseId === form.warehouseId);
+                    const qty = st !== undefined ? Number(st.quantity || 0) : 0;
+                    return { value: p.id, label: `${p.name} (Stock: ${qty})` };
+                  })
+            }
           />
 
           <InputGroup label="Return Quantity">
