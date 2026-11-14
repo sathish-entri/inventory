@@ -2554,7 +2554,267 @@ select.input-field { cursor: pointer; }
 }
 .m-list-action-btn:active { background: var(--surface-hover); transform: scale(0.93); }
 
-/* ── Compact Product Row (Image 3 style) ── */
+/* ── Responsive Cards Grid (Mobile & Tablet) ── */
+.m-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 640px) {
+  .m-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+  }
+}
+
+/* ── Modern Product Card (Image 3 Reference Style) ── */
+.m-product-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  padding: 14px 16px;
+  border: 1px solid #EEF2F6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  animation: mSlideIn 220ms ease both;
+  box-sizing: border-box;
+}
+
+.m-product-card:hover,
+.m-product-card:active {
+  background: #FFFFFF;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(81, 70, 229, 0.08);
+  border-color: #CBD5E1;
+}
+
+.m-product-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.m-product-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.m-product-card-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  border: 1px solid #E2E8F0;
+}
+
+.m-product-card-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.m-product-card-sku {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: monospace;
+  color: #5146E5;
+  letter-spacing: 0.3px;
+  display: block;
+}
+
+.m-product-card-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #172033;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.m-product-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.m-product-card-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 140ms;
+}
+.m-product-card-btn:active {
+  transform: scale(0.92);
+  background: #EDF2F7;
+}
+
+.m-product-card-divider {
+  border-top: 1px dashed #E2E8F0;
+  margin: 0;
+}
+
+.m-product-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.m-product-card-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.m-product-card-cat {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.m-product-card-alert {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.m-product-card-pricing {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.m-product-card-price {
+  font-size: 15px;
+  font-weight: 800;
+  color: #172033;
+}
+
+.m-product-card-cost {
+  font-size: 11px;
+  color: #94A3B8;
+  text-decoration: line-through;
+  margin-right: 4px;
+}
+
+/* ── Mobile & Tablet BOM Recipe Card ── */
+.m-bom-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid #EEF2F6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  animation: mSlideIn 220ms ease both;
+  box-sizing: border-box;
+}
+
+.m-bom-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.m-bom-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #172033;
+  margin: 0;
+}
+
+.m-bom-card-sku {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: monospace;
+  color: #5146E5;
+  margin-top: 2px;
+  display: block;
+}
+
+.m-bom-card-ingredients {
+  background: #F8FAFC;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #EEF2F6;
+}
+
+.m-bom-ing-item {
+  font-size: 12.5px;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.m-bom-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px dashed #E2E8F0;
+}
+
+/* Dark mode variants for modern cards */
+[data-theme="dark"] .m-product-card,
+[data-theme="dark"] .m-bom-card {
+  background: #111827 !important;
+  border-color: #1F2937 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+[data-theme="dark"] .m-product-card-name,
+[data-theme="dark"] .m-product-card-price,
+[data-theme="dark"] .m-bom-card-title {
+  color: #F1F5F9 !important;
+}
+[data-theme="dark"] .m-product-card-thumb,
+[data-theme="dark"] .m-product-card-btn,
+[data-theme="dark"] .m-bom-card-ingredients {
+  background: #1E293B !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .m-bom-ing-item {
+  color: #E2E8F0 !important;
+}
+[data-theme="dark"] .m-product-card-divider,
+[data-theme="dark"] .m-bom-card-footer {
+  border-color: #1F2937 !important;
+}
+
+/* ── Compact Product Row (Image 3 style legacy fallback) ── */
 .m-product-row {
   display: flex;
   align-items: center;

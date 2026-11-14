@@ -4308,30 +4308,24 @@ export function ProductsPage() {
           ))}
         </div>
 
-        {/* Product compact list */}
-        <div className="m-list-card">
-          <div className="m-list-card-header">
-            <div className="m-list-card-title">
-              <Package size={15} color="var(--primary)" />
-              Product List
-              <span className="m-count-pill">{mobileData.length}</span>
-            </div>
+        {/* Search Bar */}
+        <MSearchBox value={mSearch} onChange={setMSearch} placeholder="Search products by name or SKU…" />
+
+        {/* Product Cards Grid matching reference image */}
+        {products.isLoading ? (
+          <div className="card" style={{ padding: "36px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            <span className="spinner" style={{ width: 22, height: 22, display: "inline-block", marginBottom: 8 }} />
+            <div>Loading products…</div>
           </div>
-
-          <MSearchBox value={mSearch} onChange={setMSearch} placeholder="Search by name or SKU…" />
-
-          {products.isLoading ? (
-            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-              <span className="spinner" style={{ width: 20, height: 20, display: "inline-block", marginBottom: 8 }} />
-              <div>Loading products…</div>
-            </div>
-          ) : mobileData.length === 0 ? (
-            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-              <Package size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
-              <div>No products found</div>
-            </div>
-          ) : (
-            mobileData.map((p) => {
+        ) : mobileData.length === 0 ? (
+          <div className="card" style={{ padding: "36px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            <Package size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
+            <div>No products found matching "{mSearch}"</div>
+          </div>
+        ) : (
+          <div className="m-cards-grid">
+            {mobileData.map((p) => {
+              const stockQty = Number(p.reorderLevel ?? 0) * 10 || 50;
               const isOut = Number(p.reorderLevel ?? 0) === 0;
               const isLow = Number(p.reorderLevel ?? 0) > 10;
               const price = Number(p.sellingPrice) || Number(p.costPrice) || 0;
@@ -4340,39 +4334,73 @@ export function ProductsPage() {
               const icon = getProductIcon(p);
               const catBg = cat === "Electronics" ? "#DBEAFE" : cat === "Home Essentials" ? "#FEF3C7" : cat === "Raw Material" ? "#FFEDD5" : "#E0E7FF";
               const catFg = cat === "Electronics" ? "#1D4ED8" : cat === "Home Essentials" ? "#B45309" : cat === "Raw Material" ? "#C2410C" : "#4338CA";
+
               return (
-                <div key={p.id} className="m-product-row" onClick={() => handleStartEdit(p)}>
-                  <div className="m-product-thumb">{icon}</div>
-                  <div className="m-product-info">
-                    <span className="m-product-sku">#{p.sku}</span>
-                    <div className="m-product-name">{p.name}</div>
-                    <span className="m-product-cat" style={{ background: catBg, color: catFg }}>{cat}</span>
+                <div key={p.id} className="m-product-card" onClick={() => handleStartEdit(p)}>
+                  {/* Top: Icon + SKU + Title & Action Buttons */}
+                  <div className="m-product-card-top">
+                    <div className="m-product-card-left">
+                      <div className="m-product-card-thumb">{icon}</div>
+                      <div className="m-product-card-meta">
+                        <span className="m-product-card-sku">#{p.sku}</span>
+                        <div className="m-product-card-name" title={p.name}>{p.name}</div>
+                      </div>
+                    </div>
+                    <div className="m-product-card-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="m-product-card-btn"
+                        title="Edit Details"
+                        onClick={() => handleStartEdit(p)}
+                      >
+                        <Pencil size={13} color="var(--primary)" />
+                      </button>
+                      <button
+                        type="button"
+                        className="m-product-card-btn"
+                        title="Delete Product"
+                        style={{ borderColor: "#FECACA" }}
+                        onClick={() => handleDelete(p)}
+                      >
+                        <Trash2 size={13} color="#EF4444" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="m-product-right">
-                    <div className="m-product-price">{money(price)}</div>
-                    {!isRaw && Number(p.costPrice) > 0 && (
-                      <div className="m-product-cost">{money(Number(p.costPrice))}</div>
-                    )}
-                    <span className="m-product-stock-badge" style={{
-                      background: isOut ? "#FEE2E2" : isLow ? "#FFEDD5" : "#D1FAE5",
-                      color: isOut ? "#DC2626" : isLow ? "#EA580C" : "#065F46",
-                    }}>
-                      {isOut ? "Out" : isLow ? "Low" : "In Stock"}
-                    </span>
-                    <div className="m-product-btn-row" onClick={(e) => e.stopPropagation()}>
-                      <button className="m-product-action" title="Edit" onClick={() => handleStartEdit(p)}>
-                        <Pencil size={12} color="var(--primary)" />
-                      </button>
-                      <button className="m-product-action" title="Delete" onClick={() => handleDelete(p)} style={{ borderColor: "#FECACA" }}>
-                        <Trash2 size={12} color="#EF4444" />
-                      </button>
+
+                  {/* Dashed Separator */}
+                  <div className="m-product-card-divider" />
+
+                  {/* Bottom: Category Pill + Stock Status + Price */}
+                  <div className="m-product-card-bottom">
+                    <div className="m-product-card-tags">
+                      <span className="m-product-card-cat" style={{ background: catBg, color: catFg }}>
+                        {cat}
+                      </span>
+                      <span className="m-product-card-alert">
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: isOut ? "#EF4444" : isLow ? "#F59E0B" : "#16A34A",
+                          }}
+                        />
+                        {isOut ? "Out of Stock" : isLow ? `Low Stock (${stockQty})` : `In Stock (${stockQty})`}
+                      </span>
+                    </div>
+
+                    <div className="m-product-card-pricing">
+                      {!isRaw && Number(p.costPrice) > 0 && (
+                        <span className="m-product-card-cost">{money(Number(p.costPrice))}</span>
+                      )}
+                      <span className="m-product-card-price">{money(price)}</span>
                     </div>
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
 
         {/* Modals (same as desktop) */}
         <Modal open={open} onClose={() => setOpen(false)} title="New Item / Product"
@@ -11764,7 +11792,9 @@ export function BillsPage() {
 export function ManufacturingPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState<"daily-log" | "monthly-analytics" | "produce" | "history" | "recipes">("daily-log");
+  const [mBomSearch, setMBomSearch] = useState("");
 
   const products = useList<any>("products", "/products");
   const warehouses = useList<any>("wh", "/warehouses");
@@ -11965,6 +11995,551 @@ export function ManufacturingPage() {
       ),
     },
   ];
+
+  const filteredBOMGoods = useMemo(() => {
+    const q = mBomSearch.toLowerCase();
+    return finishedGoods.filter((p: any) =>
+      !q || p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)
+    );
+  }, [finishedGoods, mBomSearch]);
+
+  // ── Mobile & Tablet Responsive View for BOM / Manufacturing ──
+  if (isMobile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <MPageHeader
+          title="Factory & BOM"
+          count={finishedGoods.length}
+          icon={<Boxes size={18} color="#fff" />}
+        />
+
+        {/* Horizontal Category Pill Tabs */}
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+          {[
+            { id: "daily-log", label: "📔 Daily Notebook" },
+            { id: "recipes", label: `🥣 BOM Recipes (${finishedGoods.length})` },
+            { id: "produce", label: "⚡ Batch Run" },
+            { id: "history", label: `📜 History (${(runs.data ?? []).length})` },
+            { id: "monthly-analytics", label: "📊 Analytics" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id as any)}
+              style={{
+                flexShrink: 0,
+                padding: "8px 16px",
+                borderRadius: 20,
+                border: "none",
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                background: tab === t.id ? "var(--primary)" : "#fff",
+                color: tab === t.id ? "#fff" : "var(--text-secondary)",
+                boxShadow: tab === t.id ? "0 2px 8px rgba(81,70,229,0.3)" : "0 1px 4px rgba(0,0,0,0.06)",
+                transition: "all 160ms",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── TAB 1: DAILY NOTEBOOK (EOD LOG) ── */}
+        {tab === "daily-log" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Date & Warehouse Card */}
+            <div className="card" style={{ padding: 14 }}>
+              <div className="form-grid form-grid-2">
+                <InputGroup label="Production Date *">
+                  <input
+                    type="date"
+                    className="input-field"
+                    style={{ fontWeight: 600 }}
+                    value={logDate}
+                    onChange={(e) => setLogDate(e.target.value)}
+                  />
+                </InputGroup>
+                <InputGroup label="Factory Warehouse *">
+                  <select
+                    className="input-field"
+                    value={logWarehouseId || selectedWarehouseId}
+                    onChange={(e) => {
+                      setLogWarehouseId(e.target.value);
+                      setSelectedWarehouseId(e.target.value);
+                    }}
+                  >
+                    {(warehouses.data ?? []).map((w: any) => (
+                      <option key={w.id} value={w.id}>
+                        🏢 {w.name} ({w.code})
+                      </option>
+                    ))}
+                  </select>
+                </InputGroup>
+              </div>
+            </div>
+
+            {/* Outward Finished Goods */}
+            <div className="card" style={{ padding: 16, borderTop: "4px solid #10b981" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <h4 style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "#065f46" }}>
+                    📤 Outward (Ready Goods Produced)
+                  </h4>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    Finished products packed today (+ stock increases)
+                  </span>
+                </div>
+                <span style={{ background: "#d1fae5", color: "#065f46", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                  {outwardItems.length} Product{outwardItems.length > 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {outwardItems.map((item, idx) => (
+                  <div key={idx} style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: 10, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <select
+                      className="input-field"
+                      style={{ fontSize: 13, fontWeight: 600 }}
+                      value={item.productId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setOutwardItems((prev) =>
+                          prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
+                        );
+                      }}
+                    >
+                      <option value="">-- Select Finished Product --</option>
+                      {finishedGoods.map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          📦 {p.name} ({p.sku})
+                        </option>
+                      ))}
+                    </select>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <NumberStepper
+                        value={item.quantity || 0}
+                        onChange={(val) => {
+                          setOutwardItems((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, quantity: val } : r))
+                          );
+                        }}
+                        min={1}
+                        step={1}
+                        unit="pcs"
+                        quickAdd={[1, 5, 10, 50]}
+                        size="sm"
+                      />
+                      {outwardItems.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: "#ef4444", padding: "4px 8px" }}
+                          onClick={() => setOutwardItems((prev) => prev.filter((_, i) => i !== idx))}
+                          title="Remove item"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ flex: 1, minWidth: 140, justifyContent: "center" }}
+                    onClick={() => setOutwardItems((prev) => [...prev, { productId: "", quantity: 10 }])}
+                  >
+                    <Plus size={14} /> Add Product
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ flex: 1, minWidth: 160, justifyContent: "center", background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" }}
+                    onClick={handleAutoCalculateInwards}
+                  >
+                    🥣 Auto from Recipes
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Inward Raw Materials */}
+            <div className="card" style={{ padding: 16, borderTop: "4px solid #6366f1" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <h4 style={{ fontSize: 14.5, fontWeight: 700, margin: 0, color: "#3730a3" }}>
+                    📥 Inward (Raw Materials Consumed)
+                  </h4>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    Materials consumed today (- stock decreases)
+                  </span>
+                </div>
+                <span style={{ background: "#e0e7ff", color: "#3730a3", padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                  {inwardItems.length} Material{inwardItems.length > 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {inwardItems.map((item, idx) => {
+                  const sel = (products.data ?? []).find((p: any) => p.id === item.productId);
+                  return (
+                    <div key={idx} style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: 10, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <select
+                        className="input-field"
+                        style={{ fontSize: 13, fontWeight: 600 }}
+                        value={item.productId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInwardItems((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
+                          );
+                        }}
+                      >
+                        <option value="">-- Select Raw Material / Consumable --</option>
+                        {products.data?.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.classification === "FINISHED_GOOD" ? "📦" : "⚙️"} {p.name} ({p.sku})
+                          </option>
+                        ))}
+                      </select>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <NumberStepper
+                          value={item.quantity || 0}
+                          onChange={(val) => {
+                            setInwardItems((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, quantity: val } : r))
+                            );
+                          }}
+                          min={0.01}
+                          step={0.5}
+                          unit={sel?.unitOfMeasure || sel?.unit || "kg"}
+                          quickAdd={[1, 5, 10]}
+                          size="sm"
+                        />
+                        {inwardItems.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ color: "#ef4444", padding: "4px 8px" }}
+                            onClick={() => setInwardItems((prev) => prev.filter((_, i) => i !== idx))}
+                            title="Remove item"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ alignSelf: "flex-start", marginTop: 4 }}
+                  onClick={() => setInwardItems((prev) => [...prev, { productId: "", quantity: 10 }])}
+                >
+                  <Plus size={14} /> Add Raw Material / Gas
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Save Bar */}
+            <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>Outwards (Ready)</span>
+                  <strong style={{ fontSize: 14, color: "#059669" }}>
+                    {outwardItems.reduce((acc, o) => acc + (Number(o.quantity) || 0), 0)} pcs
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>Inwards (Used)</span>
+                  <strong style={{ fontSize: 14, color: "#4f46e5" }}>
+                    {inwardItems.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0)} units
+                  </strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14, fontWeight: 700 }}
+                disabled={
+                  postDailyLog.isPending ||
+                  !outwardItems.some((o) => o.productId && Number(o.quantity) > 0) ||
+                  !inwardItems.some((i) => i.productId && Number(i.quantity) > 0)
+                }
+                onClick={() => postDailyLog.mutate()}
+              >
+                {postDailyLog.isPending ? (
+                  <span className="spinner" style={{ width: 16, height: 16 }} />
+                ) : (
+                  <CheckCircle size={16} />
+                )}
+                Save Daily Notebook Log
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 2: BOM RECIPES ── */}
+        {tab === "recipes" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <MSearchBox value={mBomSearch} onChange={setMBomSearch} placeholder="Search finished products or SKU…" />
+            <div className="m-cards-grid">
+              {filteredBOMGoods.map((fg: any) => {
+                const comps = fg.components ?? [];
+                return (
+                  <div key={fg.id} className="m-bom-card">
+                    <div className="m-bom-card-header">
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <div style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 12,
+                          background: "linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 22,
+                          flexShrink: 0,
+                          border: "1px solid #E0E7FF"
+                        }}>
+                          📦
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <span className="m-bom-card-sku">#{fg.sku}</span>
+                          <h4 className="m-bom-card-title" title={fg.name}>{fg.name}</h4>
+                        </div>
+                      </div>
+                      <span style={{ background: "#DBEAFE", color: "#1E40AF", padding: "3px 8px", borderRadius: 6, fontSize: 10.5, fontWeight: 800 }}>
+                        Finished Good
+                      </span>
+                    </div>
+
+                    <div className="m-bom-card-ingredients">
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                        BOM Formula Ingredients ({comps.length}):
+                      </div>
+                      {comps.length === 0 ? (
+                        <div style={{ color: "#D97706", fontSize: 12, fontStyle: "italic" }}>
+                          ⚠️ No recipe configured yet
+                        </div>
+                      ) : (
+                        comps.map((c: any, i: number) => {
+                          const childProd = (products.data ?? []).find((x: any) => x.id === c.childProductId);
+                          const unit = childProd?.unit || "unit";
+                          return (
+                            <div key={i} className="m-bom-ing-item">
+                              <span style={{ fontWeight: 600 }}>• {childProd?.name || c.child?.name || "Raw Material"}</span>
+                              <span style={{ fontWeight: 700, color: "#5146E5" }}>{c.quantity} {unit}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="m-bom-card-footer">
+                      <div>
+                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, display: "block" }}>Selling Price</span>
+                        <strong style={{ fontSize: 14.5, color: "var(--text-primary)" }}>{money(fg.sellingPrice)}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700 }}
+                        onClick={() => setRecipeProduct(fg)}
+                      >
+                        🥣 {comps.length > 0 ? "Edit Formula" : "+ Set Formula"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 3: PRODUCE BATCH ── */}
+        {tab === "produce" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="card" style={{ padding: 16 }}>
+              <div className="form-grid form-grid-2" style={{ gap: 12 }}>
+                <InputGroup label="Finished Good to Produce *">
+                  <select
+                    className="input-field"
+                    style={{ fontWeight: 600 }}
+                    value={selectedProductId}
+                    onChange={(e) => setSelectedProductId(e.target.value)}
+                  >
+                    {finishedGoods.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        📦 {p.name} ({p.sku})
+                      </option>
+                    ))}
+                  </select>
+                </InputGroup>
+                <InputGroup label="Factory Warehouse *">
+                  <select
+                    className="input-field"
+                    value={selectedWarehouseId}
+                    onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                  >
+                    {(warehouses.data ?? []).map((w: any) => (
+                      <option key={w.id} value={w.id}>
+                        🏢 {w.name} ({w.code})
+                      </option>
+                    ))}
+                  </select>
+                </InputGroup>
+                <InputGroup label="Units to Produce *">
+                  <NumberStepper
+                    value={produceQty}
+                    onChange={(v) => setProduceQty(String(v))}
+                    min={1}
+                    step={1}
+                    size="md"
+                    quickAdd={[10, 50, 100]}
+                  />
+                </InputGroup>
+                <InputGroup label="Labor Cost (₹)">
+                  <NumberStepper
+                    value={laborCost}
+                    onChange={(v) => setLaborCost(String(v))}
+                    min={0}
+                    step={50}
+                    prefix="₹"
+                    size="md"
+                    quickAdd={[100, 500]}
+                  />
+                </InputGroup>
+              </div>
+
+              {/* Cost Preview */}
+              <div style={{ marginTop: 16, padding: 12, background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>Total Batch Cost</span>
+                  <strong style={{ fontSize: 16, color: "var(--accent)" }}>{money(totalBatchCost)}</strong>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", display: "block" }}>Unit Cost</span>
+                  <strong style={{ fontSize: 14 }}>{money(unitManufacturedCost)}</strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14, fontWeight: 700, marginTop: 14 }}
+                disabled={produce.isPending || !feasibility.data?.hasRecipe || Number(produceQty) <= 0}
+                onClick={() => produce.mutate()}
+              >
+                {produce.isPending ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Boxes size={16} />}
+                🚀 Produce {produceQty} Units & Deduct Stock
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB 4: PRODUCTION HISTORY ── */}
+        {tab === "history" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(runs.data ?? []).length === 0 ? (
+              <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--text-muted)" }}>
+                <Boxes size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <div>No production runs recorded yet.</div>
+              </div>
+            ) : (
+              (runs.data ?? []).map((r: any) => (
+                <div key={r.id} className="card" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#5146E5", fontSize: 12 }}>
+                      #{r.runNumber}
+                    </span>
+                    <span style={{ background: "#DCFCE7", color: "#166534", padding: "2px 8px", borderRadius: 4, fontSize: 10.5, fontWeight: 700 }}>
+                      ✓ COMPLETED
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{r.product?.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Godown: {r.warehouse?.name}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px dashed #E2E8F0" }}>
+                    <div>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Produced: </span>
+                      <strong style={{ color: "#5146E5" }}>{r.quantityProduced} pcs</strong>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Total: </span>
+                      <strong>{money(r.totalCost)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ── TAB 5: MONTHLY ANALYTICS ── */}
+        {tab === "monthly-analytics" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="card" style={{ padding: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <select
+                className="input-field"
+                style={{ width: "auto", flex: 1 }}
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              >
+                {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => (
+                  <option key={i + 1} value={i + 1}>{m}</option>
+                ))}
+              </select>
+              <select
+                className="input-field"
+                style={{ width: "auto", flex: 1 }}
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+              >
+                {[2024, 2025, 2026].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="m-cards-grid">
+              <div className="card" style={{ padding: 14, borderLeft: "4px solid #10b981" }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Total Produced</span>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#059669", marginTop: 4 }}>
+                  {monthlyAnalytics.data?.kpis?.totalProducedPacks ?? 0} <span style={{ fontSize: 13 }}>Packs</span>
+                </div>
+              </div>
+              <div className="card" style={{ padding: 14, borderLeft: "4px solid #6366f1" }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Material Efficiency</span>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#4f46e5", marginTop: 4 }}>
+                  {monthlyAnalytics.data?.kpis?.overallEfficiencyPercent ?? 98.5}%
+                </div>
+              </div>
+              <div className="card" style={{ padding: 14, borderLeft: "4px solid #ef4444" }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Wastage Loss (₹)</span>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#dc2626", marginTop: 4 }}>
+                  ₹{(monthlyAnalytics.data?.kpis?.totalWastageCostLoss ?? 0).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recipe Modal */}
+        <RecipeModal
+          product={recipeProduct}
+          open={recipeProduct !== null}
+          onClose={() => setRecipeProduct(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
