@@ -375,6 +375,105 @@ function PageHeader({ title, subtitle, children }: { title: string; subtitle?: s
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// MOBILE HOOK & HELPERS
+// ─────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 1024 : false);
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 1024);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return mobile;
+}
+
+// Avatar initials helper
+function avatarInitials(name: string) {
+  const parts = (name || "?").trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+// Avatar color from name
+function avatarColor(name: string): [string, string] {
+  const palettes: [string, string][] = [
+    ["#DBEAFE", "#1D4ED8"], ["#D1FAE5", "#065F46"], ["#FDE68A", "#92400E"],
+    ["#FCE7F3", "#9D174D"], ["#E0E7FF", "#3730A3"], ["#FEE2E2", "#991B1B"],
+    ["#CFFAFE", "#0E7490"], ["#EDE9FE", "#5B21B6"], ["#FEF3C7", "#B45309"],
+  ];
+  const idx = name ? name.charCodeAt(0) % palettes.length : 0;
+  return palettes[idx];
+}
+
+// Mobile status badge
+function MBadge({ status }: { status: string }) {
+  const s = (status || "").toLowerCase();
+  const cfg: Record<string, { bg: string; color: string }> = {
+    paid: { bg: "#D1FAE5", color: "#065F46" },
+    draft: { bg: "#F1F5F9", color: "#475569" },
+    pending: { bg: "#FEF3C7", color: "#92400E" },
+    confirmed: { bg: "#DBEAFE", color: "#1E40AF" },
+    shipped: { bg: "#E0E7FF", color: "#3730A3" },
+    cancelled: { bg: "#FEE2E2", color: "#991B1B" },
+    received: { bg: "#D1FAE5", color: "#065F46" },
+    open: { bg: "#EFF6FF", color: "#1D4ED8" },
+    billed: { bg: "#D1FAE5", color: "#065F46" },
+    active: { bg: "#D1FAE5", color: "#065F46" },
+    inactive: { bg: "#FEE2E2", color: "#991B1B" },
+    partial: { bg: "#FEF3C7", color: "#92400E" },
+    issued: { bg: "#DBEAFE", color: "#1E40AF" },
+    void: { bg: "#FEE2E2", color: "#991B1B" },
+  };
+  const c = cfg[s] ?? { bg: "#F1F5F9", color: "#475569" };
+  return (
+    <span style={{ background: c.bg, color: c.color, padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 800, letterSpacing: 0.2 }}>
+      {status}
+    </span>
+  );
+}
+
+// Mobile search box
+function MSearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="m-search-row">
+      <div className="m-search-wrap">
+        <Search size={15} className="m-search-icon" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+        <input
+          className="m-search-input"
+          placeholder={placeholder ?? "Search…"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Mobile page header (compact)
+function MPageHeader({ title, count, icon, onAdd }: { title: string; count?: number; icon?: ReactNode; onAdd?: () => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {icon && (
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#5146E5 0%,#6366F1 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {icon}
+          </div>
+        )}
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.2 }}>{title}</div>
+          {count !== undefined && <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>{count} records</div>}
+        </div>
+      </div>
+      {onAdd && (
+        <button className="m-fab" style={{ position: "static", width: 40, height: 40, borderRadius: 12, flexShrink: 0 }} onClick={onAdd}>
+          <Plus size={18} color="#fff" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 type ModalProps = { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean | number | string };
 function Modal({ open, onClose, title, children, footer, wide }: ModalProps) {
   useEffect(() => {
@@ -1502,6 +1601,7 @@ export function DataTable<T extends Record<string, any>>({
   searchPlaceholder = "Search records…",
 }: DataTableProps<T>) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const storagePrefKey = storageKey ? `oscar_view_pref_${storageKey}` : "oscar_view_pref_global";
 
   const [viewMode, setViewMode] = useState<"table" | "grid">(() => {
@@ -1974,88 +2074,148 @@ export function DataTable<T extends Record<string, any>>({
             </div>
           </div>
 
-          <div className="oscar-table-wrap">
-            <table className="oscar-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40, textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={isAllPageSelected}
-                      onChange={handleToggleSelectAll}
-                      style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
-                    />
-                  </th>
-                  <th style={{ width: 44, textAlign: "center" }}>#</th>
-                  {columns.map((c) => {
-                    const isSorted = sortCol === c.key;
-                    return (
-                      <th
-                        key={c.label}
-                        className={c.key ? "sortable" : ""}
-                        style={{ textAlign: c.align ?? "left" }}
-                        onClick={() => {
-                          if (c.key) {
-                            if (sortCol === c.key) {
-                              setSortAsc(!sortAsc);
-                            } else {
-                              setSortCol(c.key);
-                              setSortAsc(true);
-                            }
-                          }
-                        }}
-                      >
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          {c.label}
-                          {c.key && (
-                            <ArrowUpDown
-                              size={12}
-                              style={{ opacity: isSorted ? 1 : 0.4, color: isSorted ? "var(--primary)" : "inherit" }}
-                            />
-                          )}
+          {isMobile ? (
+            <div className="m-mobile-table-list" style={{ background: "#fff", borderRadius: 16, overflow: "hidden" }}>
+              {paginatedRows.map((row, i) => {
+                const globalIdx = startIdx + i;
+                const rowId = getRowId(row, globalIdx);
+                const isSelected = selectedIds.has(rowId);
+                const rawTitle = firstCol?.render ? firstCol.render(row, globalIdx) : String(row[firstCol?.key as keyof T] ?? "—");
+                const rawSub = secondCol ? (secondCol.render ? secondCol.render(row, globalIdx) : String(row[secondCol.key as keyof T] ?? "")) : null;
+                const letter = String(row[firstCol?.key as keyof T] || row[secondCol?.key as keyof T] || "R").slice(0, 1).toUpperCase();
+                const [bg, fg] = avatarColor(letter);
+
+                return (
+                  <div
+                    key={rowId}
+                    className="m-list-row"
+                    style={{
+                      background: isSelected ? "var(--primary-light)" : "#fff",
+                      cursor: onRowClick ? "pointer" : "default",
+                      animationDelay: `${Math.min(i * 35, 300)}ms`,
+                    }}
+                    onClick={() => onRowClick?.(row)}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectRow(rowId)}
+                        style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+                      />
+                      <div className="m-list-avatar" style={{ background: bg, color: fg }}>
+                        {letter}
+                      </div>
+                    </div>
+
+                    <div className="m-list-body">
+                      <div className="m-list-title">{rawTitle}</div>
+                      {rawSub && <div className="m-list-sub">{rawSub}</div>}
+                    </div>
+
+                    <div className="m-list-right">
+                      {statusCol && (
+                        <div>{statusCol.render ? statusCol.render(row, globalIdx) : String(row[statusCol.key as keyof T] ?? "")}</div>
+                      )}
+                      {dataCols[0] && (
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                          {dataCols[0].render ? dataCols[0].render(row, globalIdx) : String(row[dataCols[0].key as keyof T] ?? "")}
                         </div>
-                      </th>
+                      )}
+                      {actionCol && (
+                        <div className="m-list-actions" onClick={(e) => e.stopPropagation()}>
+                          {actionCol.render ? actionCol.render(row, globalIdx) : null}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="oscar-table-wrap">
+              <table className="oscar-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40, textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={isAllPageSelected}
+                        onChange={handleToggleSelectAll}
+                        style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+                      />
+                    </th>
+                    <th style={{ width: 44, textAlign: "center" }}>#</th>
+                    {columns.map((c) => {
+                      const isSorted = sortCol === c.key;
+                      return (
+                        <th
+                          key={c.label}
+                          className={c.key ? "sortable" : ""}
+                          style={{ textAlign: c.align ?? "left" }}
+                          onClick={() => {
+                            if (c.key) {
+                              if (sortCol === c.key) {
+                                setSortAsc(!sortAsc);
+                              } else {
+                                setSortCol(c.key);
+                                setSortAsc(true);
+                              }
+                            }
+                          }}
+                        >
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            {c.label}
+                            {c.key && (
+                              <ArrowUpDown
+                                size={12}
+                                style={{ opacity: isSorted ? 1 : 0.4, color: isSorted ? "var(--primary)" : "inherit" }}
+                              />
+                            )}
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedRows.map((row, i) => {
+                    const globalIdx = startIdx + i;
+                    const rowId = getRowId(row, globalIdx);
+                    const isSelected = selectedIds.has(rowId);
+
+                    return (
+                      <tr
+                        key={rowId}
+                        style={{
+                          background: isSelected ? "var(--primary-light)" : undefined,
+                          cursor: onRowClick ? "pointer" : "default",
+                        }}
+                        onClick={() => onRowClick?.(row)}
+                      >
+                        <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectRow(rowId)}
+                            style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
+                          />
+                        </td>
+                        <td style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, fontWeight: 600 }}>
+                          {globalIdx + 1}
+                        </td>
+                        {columns.map((c) => (
+                          <td key={c.label} style={{ textAlign: c.align ?? "left" }}>
+                            {c.render ? c.render(row, globalIdx) : String(row[c.key as keyof T] ?? "—")}
+                          </td>
+                        ))}
+                      </tr>
                     );
                   })}
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedRows.map((row, i) => {
-                  const globalIdx = startIdx + i;
-                  const rowId = getRowId(row, globalIdx);
-                  const isSelected = selectedIds.has(rowId);
-
-                  return (
-                    <tr
-                      key={rowId}
-                      style={{
-                        background: isSelected ? "var(--primary-light)" : undefined,
-                        cursor: onRowClick ? "pointer" : "default",
-                      }}
-                      onClick={() => onRowClick?.(row)}
-                    >
-                      <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectRow(rowId)}
-                          style={{ cursor: "pointer", width: 16, height: 16, accentColor: "var(--primary)" }}
-                        />
-                      </td>
-                      <td style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, fontWeight: 600 }}>
-                        {globalIdx + 1}
-                      </td>
-                      {columns.map((c) => (
-                        <td key={c.label} style={{ textAlign: c.align ?? "left" }}>
-                          {c.render ? c.render(row, globalIdx) : String(row[c.key as keyof T] ?? "—")}
-                        </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Table Pagination Footer */}
           <div className="oscar-pagination">
@@ -4002,6 +4162,227 @@ export function ProductsPage() {
   };
 
   const totalProducts = (products.data ?? []).length || 245;
+  const isMobile = useIsMobile();
+  const [mSearch, setMSearch] = useState("");
+
+  const mobileData = useMemo(() => {
+    const q = mSearch.toLowerCase();
+    return filteredData.filter((p) =>
+      !q || p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q)
+    );
+  }, [filteredData, mSearch]);
+
+  // ── Mobile UI ──
+  if (isMobile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <MPageHeader
+          title="Products"
+          count={mobileData.length}
+          icon={<Package size={18} color="#fff" />}
+          onAdd={() => setOpen(true)}
+        />
+
+        {/* KPI strip */}
+        <div className="m-kpi-strip">
+          <div className="m-kpi-pill">
+            <div className="m-kpi-val" style={{ color: "#2563EB" }}>{totalProducts}</div>
+            <div className="m-kpi-lbl">Total Items</div>
+          </div>
+          <div className="m-kpi-pill">
+            <div className="m-kpi-val" style={{ color: "#16A34A" }}>
+              {(filteredData.filter((p) => Number(p.reorderLevel ?? 0) > 0 && Number(p.reorderLevel ?? 0) <= 10)).length}
+            </div>
+            <div className="m-kpi-lbl">In Stock</div>
+          </div>
+          <div className="m-kpi-pill">
+            <div className="m-kpi-val" style={{ color: "#F59E0B" }}>
+              {filteredData.filter((p) => Number(p.reorderLevel ?? 0) > 10).length}
+            </div>
+            <div className="m-kpi-lbl">Low Stock</div>
+          </div>
+          <div className="m-kpi-pill">
+            <div className="m-kpi-val" style={{ color: "#EF4444" }}>
+              {filteredData.filter((p) => Number(p.reorderLevel ?? 0) === 0).length}
+            </div>
+            <div className="m-kpi-lbl">Out of Stock</div>
+          </div>
+        </div>
+
+        {/* Category tabs */}
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none" }}>
+          {(["ALL", "FINISHED_GOOD", "RAW_CONSUMABLE"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              style={{
+                flexShrink: 0,
+                padding: "6px 14px",
+                borderRadius: 20,
+                border: "none",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                background: tab === t ? "var(--primary)" : "#fff",
+                color: tab === t ? "#fff" : "var(--text-secondary)",
+                boxShadow: tab === t ? "0 2px 8px rgba(81,70,229,0.3)" : "0 1px 4px rgba(0,0,0,0.06)",
+                transition: "all 160ms",
+              }}
+            >
+              {t === "ALL" ? "All" : t === "FINISHED_GOOD" ? "Finished Goods" : "Raw & Gas"}
+            </button>
+          ))}
+        </div>
+
+        {/* Product compact list */}
+        <div className="m-list-card">
+          <div className="m-list-card-header">
+            <div className="m-list-card-title">
+              <Package size={15} color="var(--primary)" />
+              Product List
+              <span className="m-count-pill">{mobileData.length}</span>
+            </div>
+          </div>
+
+          <MSearchBox value={mSearch} onChange={setMSearch} placeholder="Search by name or SKU…" />
+
+          {products.isLoading ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+              <span className="spinner" style={{ width: 20, height: 20, display: "inline-block", marginBottom: 8 }} />
+              <div>Loading products…</div>
+            </div>
+          ) : mobileData.length === 0 ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+              <Package size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <div>No products found</div>
+            </div>
+          ) : (
+            mobileData.map((p) => {
+              const isOut = Number(p.reorderLevel ?? 0) === 0;
+              const isLow = Number(p.reorderLevel ?? 0) > 10;
+              const price = Number(p.sellingPrice) || Number(p.costPrice) || 0;
+              const isRaw = p.classification === "RAW_MATERIAL" || p.classification === "CONSUMABLE";
+              const cat = getProductCategory(p);
+              const icon = getProductIcon(p);
+              const catBg = cat === "Electronics" ? "#DBEAFE" : cat === "Home Essentials" ? "#FEF3C7" : cat === "Raw Material" ? "#FFEDD5" : "#E0E7FF";
+              const catFg = cat === "Electronics" ? "#1D4ED8" : cat === "Home Essentials" ? "#B45309" : cat === "Raw Material" ? "#C2410C" : "#4338CA";
+              return (
+                <div key={p.id} className="m-product-row" onClick={() => handleStartEdit(p)}>
+                  <div className="m-product-thumb">{icon}</div>
+                  <div className="m-product-info">
+                    <span className="m-product-sku">#{p.sku}</span>
+                    <div className="m-product-name">{p.name}</div>
+                    <span className="m-product-cat" style={{ background: catBg, color: catFg }}>{cat}</span>
+                  </div>
+                  <div className="m-product-right">
+                    <div className="m-product-price">{money(price)}</div>
+                    {!isRaw && Number(p.costPrice) > 0 && (
+                      <div className="m-product-cost">{money(Number(p.costPrice))}</div>
+                    )}
+                    <span className="m-product-stock-badge" style={{
+                      background: isOut ? "#FEE2E2" : isLow ? "#FFEDD5" : "#D1FAE5",
+                      color: isOut ? "#DC2626" : isLow ? "#EA580C" : "#065F46",
+                    }}>
+                      {isOut ? "Out" : isLow ? "Low" : "In Stock"}
+                    </span>
+                    <div className="m-product-btn-row" onClick={(e) => e.stopPropagation()}>
+                      <button className="m-product-action" title="Edit" onClick={() => handleStartEdit(p)}>
+                        <Pencil size={12} color="var(--primary)" />
+                      </button>
+                      <button className="m-product-action" title="Delete" onClick={() => handleDelete(p)} style={{ borderColor: "#FECACA" }}>
+                        <Trash2 size={12} color="#EF4444" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Modals (same as desktop) */}
+        <Modal open={open} onClose={() => setOpen(false)} title="New Item / Product"
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
+                {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Plus size={14} />}
+                Create Item
+              </button>
+            </>
+          }
+        >
+          <div className="form-grid form-grid-2">
+            <InputGroup label="Classification *">
+              <select className="input-field" value={form.classification} onChange={(e) => { const cls = e.target.value as any; setForm({ ...form, classification: cls, unit: cls === "FINISHED_GOOD" ? "box" : cls === "CONSUMABLE" ? "cylinder" : "kg" }); }}>
+                <option value="FINISHED_GOOD">📦 Finished Good</option>
+                <option value="RAW_MATERIAL">🏭 Raw Material</option>
+                <option value="CONSUMABLE">⚡ Consumable</option>
+              </select>
+            </InputGroup>
+            <InputGroup label="Item Name *">
+              <input className="input-field" placeholder="e.g. Autoflex Wire" value={form.name} onChange={(e) => f("name")(e.target.value)} required />
+            </InputGroup>
+            <InputGroup label="SKU *">
+              <input className="input-field" placeholder="e.g. AF-101" value={form.sku} onChange={(e) => f("sku")(e.target.value)} required />
+            </InputGroup>
+            <InputGroup label="Cost Price (₹) *">
+              <input className="input-field" type="number" value={form.costPrice} onChange={(e) => f("costPrice")(e.target.value)} min="0" />
+            </InputGroup>
+            {!isRawOrConsumable && (
+              <InputGroup label="Selling Price (₹) *">
+                <input className="input-field" type="number" value={form.sellingPrice} onChange={(e) => f("sellingPrice")(e.target.value)} min="0" />
+              </InputGroup>
+            )}
+            <InputGroup label="Reorder Level">
+              <input className="input-field" type="number" value={form.reorderLevel} onChange={(e) => f("reorderLevel")(e.target.value)} min="0" />
+            </InputGroup>
+          </div>
+        </Modal>
+
+        {editProduct && (
+          <Modal open={!!editProduct} onClose={() => setEditProduct(null)} title={`Edit — ${editProduct.name}`}
+            footer={
+              <>
+                <button className="btn btn-secondary" onClick={() => setEditProduct(null)}>Cancel</button>
+                <button className="btn btn-primary" disabled={update.isPending} onClick={() => update.mutate()}>
+                  {update.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Pencil size={14} />}
+                  Save Changes
+                </button>
+              </>
+            }
+          >
+            <div className="form-grid form-grid-2">
+              <InputGroup label="Item Name *">
+                <input className="input-field" value={editForm.name} onChange={(e) => ef("name")(e.target.value)} required />
+              </InputGroup>
+              <InputGroup label="SKU *">
+                <input className="input-field" value={editForm.sku} onChange={(e) => ef("sku")(e.target.value)} required />
+              </InputGroup>
+              <InputGroup label="Cost Price (₹)">
+                <input className="input-field" type="number" value={editForm.costPrice} onChange={(e) => ef("costPrice")(e.target.value)} min="0" />
+              </InputGroup>
+              {!isEditRawOrConsumable && (
+                <InputGroup label="Selling Price (₹)">
+                  <input className="input-field" type="number" value={editForm.sellingPrice} onChange={(e) => ef("sellingPrice")(e.target.value)} min="0" />
+                </InputGroup>
+              )}
+              <InputGroup label="Reorder Level">
+                <input className="input-field" type="number" value={editForm.reorderLevel} onChange={(e) => ef("reorderLevel")(e.target.value)} min="0" />
+              </InputGroup>
+              <InputGroup label="Status">
+                <select className="input-field" value={editForm.isActive ? "active" : "archived"} onChange={(e) => ef("isActive")(e.target.value === "active")}>
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </InputGroup>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -8037,6 +8418,145 @@ export function SalesOrdersPage() {
   const fulfilledOrders = allOrders.filter((o) => ["FULFILLED", "SHIPPED", "PACKED"].includes(o.status)).length;
   const totalSalesVal = allOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
+  const isMobile = useIsMobile();
+  const [soMSearch, setSoMSearch] = useState("");
+
+  const soMobileData = useMemo(() => {
+    const q = soMSearch.toLowerCase();
+    return allOrders.filter((o) => !q || o.number?.toLowerCase().includes(q) || o.customer?.name?.toLowerCase().includes(q));
+  }, [allOrders, soMSearch]);
+
+  if (isMobile) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <MPageHeader
+          title="Sales Orders"
+          count={totalOrders}
+          icon={<ShoppingCart size={18} color="#fff" />}
+          onAdd={() => setOpen(true)}
+        />
+
+        {/* KPI strip */}
+        <div className="m-kpi-strip">
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#2563EB" }}>{totalOrders}</div><div className="m-kpi-lbl">Total Orders</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#F59E0B" }}>{draftOrders}</div><div className="m-kpi-lbl">Draft</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#3B82F6" }}>{confirmedOrders}</div><div className="m-kpi-lbl">Confirmed</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#16A34A" }}>{fulfilledOrders}</div><div className="m-kpi-lbl">Fulfilled</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#5146E5", fontSize: 14 }}>{money(totalSalesVal)}</div><div className="m-kpi-lbl">Total Value</div></div>
+        </div>
+
+        <div className="m-list-card">
+          <div className="m-list-card-header">
+            <div className="m-list-card-title">
+              <ShoppingCart size={15} color="var(--primary)" />
+              Orders
+              <span className="m-count-pill">{soMobileData.length}</span>
+            </div>
+          </div>
+          <MSearchBox value={soMSearch} onChange={setSoMSearch} placeholder="Search by order # or customer…" />
+
+          {list.isLoading ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Loading…</div>
+          ) : soMobileData.length === 0 ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+              <ShoppingCart size={36} style={{ opacity: 0.3 }} /><div style={{ marginTop: 8 }}>No orders found</div>
+            </div>
+          ) : soMobileData.map((o) => {
+            const [bg, fg] = avatarColor(o.customer?.name ?? "O");
+            return (
+              <div key={o.id} className="m-list-row">
+                <div className="m-list-avatar" style={{ background: bg, color: fg }}>
+                  {avatarInitials(o.customer?.name ?? "SO")}
+                </div>
+                <div className="m-list-body">
+                  <div className="m-list-title">{o.customer?.name ?? "Walk-in"}</div>
+                  <div className="m-list-sub">{o.number} · {o.lines?.length ?? 0} items</div>
+                </div>
+                <div className="m-list-right">
+                  <div className="m-list-amount">{money(Number(o.total))}</div>
+                  <MBadge status={o.status} />
+                  <div className="m-list-actions" onClick={(e) => e.stopPropagation()}>
+                    {o.status === "DRAFT" && (
+                      <button className="m-list-action-btn" title="Confirm" onClick={() => confirm.mutate(o.id)}>
+                        <Check size={13} color="#16A34A" />
+                      </button>
+                    )}
+                    {o.status !== "CANCELLED" && o.status !== "FULFILLED" && (
+                      <button className="m-list-action-btn" title="Cancel" onClick={() => cancel.mutate(o.id)}>
+                        <X size={13} color="#EF4444" />
+                      </button>
+                    )}
+                    <button className="m-list-action-btn" title="Delete" onClick={() => setDeleteTarget(o)} style={{ borderColor: "#FECACA" }}>
+                      <Trash2 size={13} color="#EF4444" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Create Modal */}
+        <Modal open={open} onClose={() => setOpen(false)} title="New Sales Order"
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={create.isPending} onClick={() => void create.mutate()}>
+                {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Plus size={14} />}
+                Create Order
+              </button>
+            </>
+          }
+        >
+          <div className="form-grid form-grid-2">
+            <InputGroup label="Customer *">
+              <select className="input-field" value={form.customerId} onChange={(e) => setForm((p) => ({ ...p, customerId: e.target.value }))}>
+                <option value="">Select customer…</option>
+                {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </InputGroup>
+            <InputGroup label="Warehouse *">
+              <select className="input-field" value={form.warehouseId} onChange={(e) => setForm((p) => ({ ...p, warehouseId: e.target.value }))}>
+                <option value="">Select warehouse…</option>
+                {(warehouses.data ?? []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </InputGroup>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            {lines.map((ln, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <select className="input-field" style={{ flex: 2 }} value={ln.productId} onChange={(e) => { const p = (products.data ?? []).find((x) => x.id === e.target.value); setLines((prev) => prev.map((l, j) => j === i ? { ...l, productId: e.target.value, unitPrice: p?.sellingPrice ?? 0 } : l)); }}>
+                  <option value="">Product…</option>
+                  {(products.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input className="input-field" style={{ flex: 1, width: 70 }} type="number" min={1} value={ln.quantity} onChange={(e) => setLines((prev) => prev.map((l, j) => j === i ? { ...l, quantity: Number(e.target.value) } : l))} placeholder="Qty" />
+                <button type="button" onClick={() => setLines((prev) => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer" }}><X size={16} /></button>
+              </div>
+            ))}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLines((prev) => [...prev, { productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }])}>
+              <Plus size={12} /> Add Item
+            </button>
+          </div>
+        </Modal>
+
+        {deleteTarget && (
+          <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Order?"
+            footer={
+              <>
+                <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)}>Cancel</button>
+                <button className="btn btn-primary" style={{ background: "#EF4444", borderColor: "#EF4444" }} onClick={() => removeSO.mutate(deleteTarget.id)}>
+                  <Trash2 size={14} /> Delete
+                </button>
+              </>
+            }
+          >
+            <p>Delete order <strong>{deleteTarget.number}</strong>? This cannot be undone.</p>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
   const kanbanCols: KanbanCol<SalesOrder>[] = [
     { id: "DRAFT", title: "Draft Orders", badgeStatus: "DRAFT", color: "#94a3b8", items: allOrders.filter((o) => o.status === "DRAFT") },
     { id: "CONFIRMED", title: "Confirmed Orders", badgeStatus: "CONFIRMED", color: "#3b82f6", items: allOrders.filter((o) => o.status === "CONFIRMED") },
@@ -9222,6 +9742,87 @@ export function InvoicesPage() {
       ),
     },
   ];
+
+  const isMobileInv = useIsMobile();
+  const [invMSearch, setInvMSearch] = useState("");
+  const invMobileData = useMemo(() => {
+    const q = invMSearch.toLowerCase();
+    return filteredInvoices.filter((inv) => !q || inv.number?.toLowerCase().includes(q) || (inv.customer?.name ?? "").toLowerCase().includes(q));
+  }, [filteredInvoices, invMSearch]);
+
+  if (isMobileInv) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <MPageHeader title="Invoices" count={filteredInvoices.length} icon={<Receipt size={18} color="#fff" />} />
+        <div style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>Filter by Customer</div>
+          <select className="input-field" style={{ fontSize: 14, width: "100%" }} value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>
+            <option value="">All Customers</option>
+            {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="m-kpi-strip">
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#5146E5", fontSize: 14 }}>{money(custTotalSales)}</div><div className="m-kpi-lbl">Invoiced</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#16A34A", fontSize: 14 }}>{money(custTotalPaid)}</div><div className="m-kpi-lbl">Paid</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#EF4444", fontSize: 14 }}>{money(custBalanceDue)}</div><div className="m-kpi-lbl">Balance</div></div>
+          <div className="m-kpi-pill"><div className="m-kpi-val" style={{ color: "#2563EB" }}>{filteredInvoices.length}</div><div className="m-kpi-lbl">Count</div></div>
+        </div>
+        <div className="m-list-card">
+          <div className="m-list-card-header">
+            <div className="m-list-card-title"><FileText size={15} color="var(--primary)" />Invoice List<span className="m-count-pill">{invMobileData.length}</span></div>
+          </div>
+          <MSearchBox value={invMSearch} onChange={setInvMSearch} placeholder="Search invoice # or customer…" />
+          {list.isLoading ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)" }}>Loading…</div>
+          ) : invMobileData.length === 0 ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-muted)" }}>No invoices found</div>
+          ) : invMobileData.map((inv) => {
+            const [bg, fg] = avatarColor(inv.customer?.name ?? "I");
+            const bal = Number(inv.total) - Number(inv.amountPaid);
+            return (
+              <div key={inv.id} className="m-list-row">
+                <div className="m-list-avatar" style={{ background: bg, color: fg }}>{avatarInitials(inv.customer?.name ?? "IN")}</div>
+                <div className="m-list-body">
+                  <div className="m-list-title">{inv.customer?.name ?? "—"}</div>
+                  <div className="m-list-sub">{inv.number}{inv.dueDate ? ` · Due ${new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}</div>
+                </div>
+                <div className="m-list-right">
+                  <div className="m-list-amount">{money(Number(inv.total))}</div>
+                  {bal > 0 && <div style={{ fontSize: 10.5, color: "#EF4444", fontWeight: 700 }}>Bal: {money(bal)}</div>}
+                  <MBadge status={inv.status} />
+                  <div className="m-list-actions" onClick={(e) => e.stopPropagation()}>
+                    <button className="m-list-action-btn" title="Timeline" onClick={() => setTimelineInv(inv)}><Clock size={12} color="var(--accent)" /></button>
+                    <button className="m-list-action-btn" title="Print" onClick={() => setPrintInv(inv)}><Printer size={12} color="var(--text-secondary)" /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {readyToInvoice.length > 0 && (
+          <div className="m-list-card">
+            <div className="m-list-card-header">
+              <div className="m-list-card-title"><Zap size={15} color="#F59E0B" />Ready to Invoice<span className="m-count-pill" style={{ background: "#F59E0B" }}>{readyToInvoice.length}</span></div>
+            </div>
+            {readyToInvoice.map((o) => (
+              <div key={o.id} className="m-list-row" style={{ justifyContent: "space-between" }}>
+                <div><div className="m-list-title">{o.customer?.name ?? "—"}</div><div className="m-list-sub">{o.number}</div></div>
+                <button className="btn btn-primary btn-sm" disabled={invoicingId === o.id} onClick={() => { setInvoicingId(o.id); createInvoice.mutate(o.id); }} style={{ fontSize: 12, padding: "5px 12px" }}>
+                  {invoicingId === o.id ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <FileText size={12} />} Invoice
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {timelineInv && <Modal open={!!timelineInv} onClose={() => setTimelineInv(null)} title={`Timeline — ${timelineInv.number}`}>
+          <div><p><strong>Customer:</strong> {timelineInv.customer?.name}</p><p><strong>Total:</strong> {money(Number(timelineInv.total))}</p><p><strong>Paid:</strong> {money(Number(timelineInv.amountPaid))}</p><p><strong>Status:</strong> <MBadge status={timelineInv.status} /></p></div>
+        </Modal>}
+        {printInv && <Modal open={!!printInv} onClose={() => setPrintInv(null)} title={`Print — ${printInv.number}`}>
+          <div style={{ textAlign: "center", padding: "16px 0" }}><p>Use desktop for full print preview.</p><button className="btn btn-primary" onClick={() => setPrintInv(null)}>Close</button></div>
+        </Modal>}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
