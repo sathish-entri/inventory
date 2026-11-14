@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import { SalesService } from "./sales.service";
@@ -38,6 +38,12 @@ export class SalesController {
     return this.sales.convertEstimateToSalesOrder(user.organizationId, id, body?.warehouseId);
   }
 
+  @Delete("estimates/:id")
+  @RequirePermissions("estimate:update")
+  deleteEstimate(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.sales.deleteEstimate(user.organizationId, id);
+  }
+
   @Post("sales-orders")
   @RequirePermissions("sales_order:create")
   createSO(@CurrentUser() user: AuthUser, @Body() dto: CreateSalesOrderDto) {
@@ -66,6 +72,12 @@ export class SalesController {
   @RequirePermissions("sales_order:cancel")
   cancel(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.sales.cancelSalesOrder(user.organizationId, id);
+  }
+
+  @Delete("sales-orders/:id")
+  @RequirePermissions("sales_order:cancel")
+  deleteSO(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.sales.deleteSalesOrder(user.organizationId, id);
   }
 
   @Post("packages")

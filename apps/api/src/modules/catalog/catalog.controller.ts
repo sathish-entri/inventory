@@ -79,6 +79,12 @@ export class CatalogController {
     return this.catalog.updateWarehouse(user.organizationId, id, dto);
   }
 
+  @Delete("warehouses/:id")
+  @RequirePermissions("warehouse:delete")
+  deleteWarehouse(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.catalog.deleteWarehouse(user.organizationId, id);
+  }
+
   @Post("products")
   @RequirePermissions("product:create")
   createProduct(@CurrentUser() user: AuthUser, @Body() dto: CreateProductDto) {
@@ -131,6 +137,12 @@ export class CatalogController {
     return this.catalog.updateCustomer(user.organizationId, id, dto);
   }
 
+  @Delete("customers/:id")
+  @RequirePermissions("customer:delete")
+  deleteCustomer(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.catalog.deleteCustomer(user.organizationId, id);
+  }
+
   @Get("customers")
   @RequirePermissions("customer:read")
   listCustomers(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
@@ -160,6 +172,12 @@ export class CatalogController {
   @RequirePermissions("vendor:update")
   updateVendor(@CurrentUser() user: AuthUser, @Param("id") id: string, @Body() dto: PartyDto) {
     return this.catalog.updateVendor(user.organizationId, id, dto);
+  }
+
+  @Delete("vendors/:id")
+  @RequirePermissions("vendor:delete")
+  deleteVendor(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.catalog.deleteVendor(user.organizationId, id);
   }
 
   @Get("vendors")

@@ -3649,32 +3649,104 @@ export function ProductsPage() {
 // ─────────────────────────────────────────────────────────
 // WAREHOUSES PAGE
 // ─────────────────────────────────────────────────────────
-type Warehouse = { id: string; name: string; code: string; city?: string; country?: string };
+type Warehouse = { id: string; name: string; code: string; city?: string; country?: string; address?: string };
 
 export function WarehousesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const list = useList<Warehouse>("wh", "/warehouses");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", code: "", city: "", country: "" });
+  const [form, setForm] = useState({ name: "", code: "", city: "", country: "", address: "" });
   const f = (k: string) => (v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  // Edit state
+  const [editTarget, setEditTarget] = useState<Warehouse | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", code: "", city: "", country: "", address: "" });
+  const ef = (k: string) => (v: string) => setEditForm((p) => ({ ...p, [k]: v }));
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<Warehouse | null>(null);
 
   const create = useMutation({
     mutationFn: () => api.post("/warehouses", form),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["wh"] }); setOpen(false); setForm({ name: "", code: "", city: "", country: "" }); toast("Warehouse created"); },
-    onError: () => toast("Could not create warehouse.", "error"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wh"] });
+      setOpen(false);
+      setForm({ name: "", code: "", city: "", country: "", address: "" });
+      toast("Warehouse created successfully!");
+    },
+    onError: (err: any) => toast(err.response?.data?.message || "Could not create warehouse.", "error"),
   });
+
+  const update = useMutation({
+    mutationFn: () => api.patch(`/warehouses/${editTarget?.id}`, editForm),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wh"] });
+      setEditTarget(null);
+      toast("Warehouse updated successfully!");
+    },
+    onError: (err: any) => toast(err.response?.data?.message || "Could not update warehouse.", "error"),
+  });
+
+  const removeWarehouse = useMutation({
+    mutationFn: (id: string) => api.delete(`/warehouses/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["wh"] });
+      setDeleteTarget(null);
+      toast(res.data?.message || "Warehouse deleted successfully!");
+    },
+    onError: (err: any) => {
+      setDeleteTarget(null);
+      toast(err.response?.data?.message || "Could not delete warehouse.", "error");
+    },
+  });
+
+  const openEdit = (wh: Warehouse) => {
+    setEditTarget(wh);
+    setEditForm({
+      name: wh.name || "",
+      code: wh.code || "",
+      city: wh.city || "",
+      country: wh.country || "",
+      address: wh.address || "",
+    });
+  };
 
   const columns: Column<Warehouse>[] = [
     { label: "Warehouse Name", render: (r) => <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Building2 size={15} color="var(--accent)" /><span style={{ fontWeight: 600 }}>{r.name}</span></div> },
     { label: "Code", render: (r) => <span className="font-mono" style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 4, fontSize: 12 }}>{r.code}</span> },
     { label: "City", render: (r) => r.city ?? "—" },
     { label: "Country", render: (r) => r.country ?? "—" },
+    {
+      label: "Actions",
+      align: "right",
+      render: (r) => (
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+            style={{ fontSize: 11 }}
+          >
+            ✏️ Edit
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
+            style={{ fontSize: 11, color: "#dc2626", borderColor: "#fecaca" }}
+            title="Delete Warehouse"
+          >
+            🗑️ Delete
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div>
-      <PageHeader title="Warehouses" subtitle="Manage your storage locations">
+      <PageHeader title="Warehouses" subtitle="Manage your storage locations & inventory hubs">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           <Plus size={15} /> New Warehouse
         </button>
@@ -3683,11 +3755,12 @@ export function WarehousesPage() {
         <DataTable columns={columns} data={list.data ?? []} loading={list.isLoading} error={list.error} searchFields={["name", "code", "city"]} emptyIcon={<Building2 size={48} />} emptyText="No warehouses yet" />
       </div>
 
+      {/* Create Modal */}
       <Modal open={open} onClose={() => setOpen(false)} title="New Warehouse"
         footer={
           <>
             <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn-primary" disabled={create.isPending} onClick={() => create.mutate()}>
+            <button className="btn btn-primary" disabled={create.isPending || !form.name || !form.code} onClick={() => create.mutate()}>
               {create.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Plus size={14} />} Create
             </button>
           </>
@@ -3698,8 +3771,68 @@ export function WarehousesPage() {
           <InputGroup label="Code *"><input className="input-field" value={form.code} onChange={(e) => f("code")(e.target.value)} required /></InputGroup>
           <InputGroup label="City"><input className="input-field" value={form.city} onChange={(e) => f("city")(e.target.value)} /></InputGroup>
           <InputGroup label="Country"><input className="input-field" value={form.country} onChange={(e) => f("country")(e.target.value)} /></InputGroup>
+          <div style={{ gridColumn: "span 2" }}>
+            <InputGroup label="Address / Plant Location"><input className="input-field" value={form.address} onChange={(e) => f("address")(e.target.value)} placeholder="Factory road, premises..." /></InputGroup>
+          </div>
         </div>
       </Modal>
+
+      {/* Edit Modal */}
+      {editTarget && (
+        <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={`Edit Warehouse — ${editTarget.name}`}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setEditTarget(null)}>Cancel</button>
+              <button className="btn btn-primary" disabled={update.isPending || !editForm.name || !editForm.code} onClick={() => update.mutate()}>
+                {update.isPending ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <Check size={14} />} Save Changes
+              </button>
+            </>
+          }
+        >
+          <div className="form-grid form-grid-2">
+            <InputGroup label="Warehouse Name *"><input className="input-field" value={editForm.name} onChange={(e) => ef("name")(e.target.value)} required /></InputGroup>
+            <InputGroup label="Code *"><input className="input-field" value={editForm.code} onChange={(e) => ef("code")(e.target.value)} required /></InputGroup>
+            <InputGroup label="City"><input className="input-field" value={editForm.city} onChange={(e) => ef("city")(e.target.value)} /></InputGroup>
+            <InputGroup label="Country"><input className="input-field" value={editForm.country} onChange={(e) => ef("country")(e.target.value)} /></InputGroup>
+            <div style={{ gridColumn: "span 2" }}>
+              <InputGroup label="Address / Plant Location"><input className="input-field" value={editForm.address} onChange={(e) => ef("address")(e.target.value)} placeholder="Factory road, premises..." /></InputGroup>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <Modal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title={`Confirm Delete Warehouse — ${deleteTarget.name}`}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={removeWarehouse.isPending}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{ background: "#dc2626", color: "#fff", fontWeight: 600 }}
+                disabled={removeWarehouse.isPending}
+                onClick={() => removeWarehouse.mutate(deleteTarget.id)}
+              >
+                {removeWarehouse.isPending ? "Deleting..." : "Yes, Delete Warehouse"}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>
+              Are you sure you want to permanently delete warehouse <strong>{deleteTarget.name} ({deleteTarget.code})</strong>?
+            </p>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 12, fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+              ⚠️ <strong>Integrity Guard:</strong> You cannot delete the only warehouse in your organization, nor any warehouse holding positive physical inventory stock. Please transfer or adjust out stock before deleting.
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -4992,6 +5125,22 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
   // ── Vendor statement state ──
   const [statementVendor, setStatementVendor] = useState<Party | null>(null);
 
+  // ── Delete state ──
+  const [deleteTarget, setDeleteTarget] = useState<Party | null>(null);
+
+  const removeParty = useMutation({
+    mutationFn: (id: string) => api.delete(`/${kind}/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: [kind] });
+      setDeleteTarget(null);
+      toast(res.data?.message || `${isCustomer ? "Customer" : "Vendor"} deleted successfully!`);
+    },
+    onError: (err: any) => {
+      setDeleteTarget(null);
+      toast(err.response?.data?.message || `Could not delete ${isCustomer ? "customer" : "vendor"}.`, "error");
+    },
+  });
+
   const f = (k: string) => (v: any) =>
     setForm((p) => {
       const next = { ...p, [k]: v };
@@ -5113,6 +5262,15 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
           >
             ✏️ Edit
           </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
+            style={{ fontSize: 11, color: "#dc2626", borderColor: "#fecaca" }}
+            title={`Delete ${isCustomer ? "Customer" : "Vendor"}`}
+          >
+            🗑️ Delete
+          </button>
         </div>
       ),
     },
@@ -5182,6 +5340,39 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
       >
         <PartyFormBody values={editForm} onChange={ef} sameBilling={editSameAsBilling} setSameBilling={setEditSameAsBilling} kind={kind} />
       </Modal>
+
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteTarget && (
+        <Modal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title={`Confirm Delete ${isCustomer ? "Customer" : "Vendor"}`}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={removeParty.isPending}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{ background: "#dc2626", color: "#fff", fontWeight: 600 }}
+                disabled={removeParty.isPending}
+                onClick={() => removeParty.mutate(deleteTarget.id)}
+              >
+                {removeParty.isPending ? "Deleting..." : "Yes, Permanently Delete"}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>
+              Are you sure you want to permanently delete <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 12, fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+              ⚠️ <strong>Integrity Guard:</strong> If this {isCustomer ? "customer has existing sales orders or invoices" : "vendor has existing purchase orders or bills"}, the system will block deletion to prevent ledger and audit corruption.
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -5484,6 +5675,20 @@ export function EstimatesPage() {
   const [form, setForm] = useState({ customerId: "", warehouseId: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
   const [printEstimate, setPrintEstimate] = useState<Estimate | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Estimate | null>(null);
+
+  const removeEstimate = useMutation({
+    mutationFn: (id: string) => api.delete(`/estimates/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["estimates"] });
+      setDeleteTarget(null);
+      toast(res.data?.message || "Estimate deleted successfully!");
+    },
+    onError: (err: any) => {
+      setDeleteTarget(null);
+      toast(err.response?.data?.message || "Could not delete estimate.", "error");
+    },
+  });
 
   const selectedCustomer = (customers.data ?? []).find((c) => c.id === form.customerId);
 
@@ -5595,6 +5800,18 @@ export function EstimatesPage() {
             {convertToOrder.isPending ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <ShoppingCart size={13} />}
             Convert to Order
           </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(r);
+            }}
+            style={{ fontSize: 11, color: "#dc2626", borderColor: "#fecaca" }}
+            title={`Delete Estimate ${r.number}`}
+          >
+            🗑️ Delete
+          </button>
         </div>
       ),
     },
@@ -5665,6 +5882,39 @@ export function EstimatesPage() {
 
       {/* Printable / Shareable Estimate PDF Modal */}
       <PrintEstimateModal estimate={printEstimate} onClose={() => setPrintEstimate(null)} />
+
+      {/* Delete Estimate Confirmation Modal */}
+      {deleteTarget && (
+        <Modal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title={`Confirm Delete Estimate — ${deleteTarget.number}`}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={removeEstimate.isPending}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{ background: "#dc2626", color: "#fff", fontWeight: 600 }}
+                disabled={removeEstimate.isPending}
+                onClick={() => removeEstimate.mutate(deleteTarget.id)}
+              >
+                {removeEstimate.isPending ? "Deleting..." : "Yes, Delete Estimate"}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>
+              Are you sure you want to permanently delete quotation <strong>{deleteTarget.number}</strong>?
+            </p>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 12, fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+              ⚠️ <strong>Integrity Guard:</strong> If this quotation was already converted into a confirmed Sales Order, deletion is blocked to protect the order history.
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6134,6 +6384,21 @@ export function SalesOrdersPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ customerId: "", warehouseId: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 18 }]);
+  const [deleteTarget, setDeleteTarget] = useState<SalesOrder | null>(null);
+
+  const removeSO = useMutation({
+    mutationFn: (id: string) => api.delete(`/sales-orders/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["so"] });
+      qc.invalidateQueries({ queryKey: ["inv"] });
+      setDeleteTarget(null);
+      toast(res.data?.message || "Sales order deleted successfully");
+    },
+    onError: (err: any) => {
+      setDeleteTarget(null);
+      toast(err.response?.data?.message || "Could not delete sales order.", "error");
+    },
+  });
 
   const selectedCustomer = (customers.data ?? []).find((c) => c.id === form.customerId);
 
@@ -6228,7 +6493,7 @@ export function SalesOrdersPage() {
       label: "Actions",
       align: "right",
       render: (r) => (
-        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
           {r.status === "DRAFT" && (
             <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); confirm.mutate(r.id); }}>
               <Check size={12} /> Confirm
@@ -6237,6 +6502,20 @@ export function SalesOrdersPage() {
           {r.status !== "CANCELLED" && r.status !== "FULFILLED" && (
             <button className="btn btn-secondary btn-sm" style={{ color: "var(--danger)" }} onClick={(e) => { e.stopPropagation(); cancel.mutate(r.id); }}>
               Cancel
+            </button>
+          )}
+          {r.status !== "FULFILLED" && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(r);
+              }}
+              style={{ fontSize: 11, color: "#dc2626", borderColor: "#fecaca" }}
+              title={`Delete Order ${r.number}`}
+            >
+              🗑️ Delete
             </button>
           )}
         </div>
@@ -6319,6 +6598,39 @@ export function SalesOrdersPage() {
 
         <LineItemBuilder lines={lines} onChange={setLines} products={products.data ?? []} mode="selling" customerState={selectedCustomer?.state} />
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <Modal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title={`Confirm Delete Sales Order — ${deleteTarget.number}`}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={removeSO.isPending}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{ background: "#dc2626", color: "#fff", fontWeight: 600 }}
+                disabled={removeSO.isPending}
+                onClick={() => removeSO.mutate(deleteTarget.id)}
+              >
+                {removeSO.isPending ? "Deleting..." : "Yes, Delete Order"}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>
+              Are you sure you want to permanently delete sales order <strong>{deleteTarget.number}</strong>?
+            </p>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 12, fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+              ⚠️ <strong>Integrity Guard:</strong> If packages have already been created or customer invoices generated, deletion will be blocked to maintain dispatch and accounting integrity. Any active inventory reservations will be automatically released.
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -7570,6 +7882,20 @@ export function PurchaseOrdersPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ vendorId: "", warehouseId: "", number: "", notes: "" });
   const [lines, setLines] = useState<LineItem[]>([{ productId: "", quantity: 1, unitPrice: 0, taxRate: 0 }]);
+  const [deleteTarget, setDeleteTarget] = useState<PurchaseOrder | null>(null);
+
+  const removePO = useMutation({
+    mutationFn: (id: string) => api.delete(`/purchase-orders/${id}`),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["po"] });
+      setDeleteTarget(null);
+      toast(res.data?.message || "Purchase order deleted successfully");
+    },
+    onError: (err: any) => {
+      setDeleteTarget(null);
+      toast(err.response?.data?.message || "Could not delete purchase order.", "error");
+    },
+  });
 
   const create = useMutation({
     mutationFn: () => {
@@ -7623,11 +7949,31 @@ export function PurchaseOrdersPage() {
       label: "Actions", align: "right",
       render: (r) => {
         const hasPendingStock = (r.lines ?? []).some((l) => Number(l.quantity) > Number(l.receivedQty ?? 0));
-        return (hasPendingStock && r.status !== "RECEIVED" && r.status !== "CANCELLED" && r.status !== "BILLED") ? (
-          <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); receive.mutate(r); }} disabled={receive.isPending}>
-            <Download size={12} /> Receive Stock
-          </button>
-        ) : null;
+        const canReceive = hasPendingStock && r.status !== "RECEIVED" && r.status !== "CANCELLED" && r.status !== "BILLED";
+        const canDelete = r.status !== "RECEIVED" && r.status !== "BILLED" && !(r.lines ?? []).some((l) => Number(l.receivedQty) > 0);
+        return (
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            {canReceive && (
+              <button className="btn btn-success btn-sm" onClick={(e) => { e.stopPropagation(); receive.mutate(r); }} disabled={receive.isPending}>
+                <Download size={12} /> Receive Stock
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteTarget(r);
+                }}
+                style={{ fontSize: 11, color: "#dc2626", borderColor: "#fecaca" }}
+                title={`Delete PO ${r.number}`}
+              >
+                🗑️ Delete
+              </button>
+            )}
+          </div>
+        );
       },
     },
   ];
@@ -7768,6 +8114,39 @@ export function PurchaseOrdersPage() {
           </div>
         )}
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <Modal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title={`Confirm Delete Purchase Order — ${deleteTarget.number}`}
+          footer={
+            <>
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={removePO.isPending}>
+                Cancel
+              </button>
+              <button
+                className="btn"
+                style={{ background: "#dc2626", color: "#fff", fontWeight: 600 }}
+                disabled={removePO.isPending}
+                onClick={() => removePO.mutate(deleteTarget.id)}
+              >
+                {removePO.isPending ? "Deleting..." : "Yes, Delete PO"}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>
+              Are you sure you want to permanently delete purchase order <strong>{deleteTarget.number}</strong>?
+            </p>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 12, fontSize: 13, color: "#991b1b", lineHeight: 1.5 }}>
+              ⚠️ <strong>Integrity Guard:</strong> If goods have already been received into inventory stock, or if vendor bills are attached to this order, deletion will be blocked to maintain historical inventory and accounting records.
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

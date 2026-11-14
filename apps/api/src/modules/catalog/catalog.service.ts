@@ -312,6 +312,78 @@ export class CatalogService {
     return this.prisma.vendor.update({ where: { id }, data });
   }
 
+  async deleteCustomer(organizationId: string, id: string) {
+    const customer = await this.prisma.customer.findFirst({ where: { id, organizationId } });
+    if (!customer) throw new NotFoundException("Customer not found");
+
+    const [soCount, invCount] = await Promise.all([
+      this.prisma.salesOrder.count({ where: { organizationId, customerId: id } }),
+      this.prisma.invoice.count({ where: { organizationId, customerId: id } }),
+    ]);
+
+    if (soCount > 0 || invCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete customer '${customer.name}' because they have ${soCount} sales order(s) and ${invCount} invoice(s) on record. Historical audit records cannot be permanently deleted.`,
+      );
+    }
+
+    // Delete any draft estimates for this customer before deleting customer
+    await this.prisma.$transaction(async (tx: any) => {
+      const estimates = await tx.estimate.findMany({ where: { organizationId, customerId: id }, select: { id: true } });
+      const estIds = estimates.map((e: any) => e.id);
+      if (estIds.length > 0) {
+        await tx.estimateLine.deleteMany({ where: { estimateId: { in: estIds } } });
+        await tx.estimate.deleteMany({ where: { id: { in: estIds } } });
+      }
+      await tx.customer.delete({ where: { id } });
+    });
+
+    return { success: true, message: `Customer '${customer.name}' deleted successfully.` };
+  }
+
+  async deleteVendor(organizationId: string, id: string) {
+    const vendor = await this.prisma.vendor.findFirst({ where: { id, organizationId } });
+    if (!vendor) throw new NotFoundException("Vendor not found");
+
+    const [poCount, billCount] = await Promise.all([
+      this.prisma.purchaseOrder.count({ where: { organizationId, vendorId: id } }),
+      this.prisma.bill.count({ where: { organizationId, vendorId: id } }),
+    ]);
+
+    if (poCount > 0 || billCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete vendor '${vendor.name}' because they have ${poCount} purchase order(s) and ${billCount} bill(s) on record. Historical purchase ledgers cannot be deleted.`,
+      );
+    }
+
+    await this.prisma.vendor.delete({ where: { id } });
+    return { success: true, message: `Vendor '${vendor.name}' deleted successfully.` };
+  }
+
+  async deleteWarehouse(organizationId: string, id: string) {
+    const wh = await this.getWarehouse(organizationId, id);
+    const count = await this.prisma.warehouse.count({ where: { organizationId } });
+    if (count <= 1) {
+      throw new BadRequestException("Cannot delete the only warehouse in your organization.");
+    }
+
+    const stockWithQty = await this.prisma.inventoryStock.findFirst({
+      where: { organizationId, warehouseId: id, quantity: { gt: 0 } },
+    });
+    if (stockWithQty) {
+      throw new BadRequestException(
+        `Cannot delete warehouse '${wh.name}' because it currently holds non-zero physical stock. Please transfer or adjust stock out first.`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.inventoryStock.deleteMany({ where: { warehouseId: id } });
+      await tx.warehouse.delete({ where: { id } });
+    });
+
+    return { success: true, message: `Warehouse '${wh.name}' deleted successfully.` };
+  }
+
   private async page(
     model: { count: Function; findMany: Function },
     organizationId: string,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
 import { PurchasesService } from "./purchases.service";
@@ -25,6 +25,12 @@ export class PurchasesController {
   @RequirePermissions("purchase_order:read")
   list(@CurrentUser() user: AuthUser, @Query("page") page?: string, @Query("pageSize") pageSize?: string) {
     return this.purchases.listPurchaseOrders(user.organizationId, Number(page) || 1, Number(pageSize) || 50);
+  }
+
+  @Delete("purchase-orders/:id")
+  @RequirePermissions("purchase_order:update")
+  deletePO(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.purchases.deletePurchaseOrder(user.organizationId, id);
   }
 
   @Post("purchase-orders/:id/receive")

@@ -98,6 +98,44 @@ export class PurchasesService {
     return row;
   }
 
+  async deletePurchaseOrder(orgId: string, id: string) {
+    const po = await this.prisma.purchaseOrder.findFirst({
+      where: { id, organizationId: orgId },
+      include: {
+        lines: true,
+        receives: true,
+        bills: true,
+        purchaseReturns: true,
+      },
+    });
+    if (!po) throw new NotFoundException("Purchase order not found");
+
+    if (po.receives.length > 0 || po.lines.some((l: any) => Number(l.receivedQty) > 0) || po.status === "RECEIVED") {
+      throw new BadRequestException(
+        `Cannot delete Purchase Order '${po.number}' because items have already been received into warehouse inventory. Stock receipts cannot be deleted.`,
+      );
+    }
+
+    if (po.bills.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete Purchase Order '${po.number}' because ${po.bills.length} vendor bill(s) are attached. Ledger records cannot be deleted.`,
+      );
+    }
+
+    if (po.purchaseReturns.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete Purchase Order '${po.number}' because purchase return(s) exist for it.`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.purchaseOrderLine.deleteMany({ where: { purchaseOrderId: id } });
+      await tx.purchaseOrder.delete({ where: { id } });
+    });
+
+    return { success: true, message: `Purchase Order '${po.number}' deleted successfully.` };
+  }
+
   async receive(orgId: string, purchaseOrderId: string, dto: ReceiveDto, userId: string) {
     const po = await this.getPO(orgId, purchaseOrderId);
     if (po.status === "CANCELLED") throw new BadRequestException("Purchase order is cancelled");

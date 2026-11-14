@@ -542,6 +542,33 @@ export class SalesService {
     return { data, meta: paginateMeta(page, pageSize, total) };
   }
 
+  async deleteEstimate(orgId: string, id: string) {
+    const est = await this.prisma.estimate.findFirst({
+      where: { id, organizationId: orgId },
+      include: { lines: true },
+    });
+    if (!est) throw new NotFoundException("Estimate not found");
+
+    const convertedSO = await this.prisma.salesOrder.findFirst({
+      where: {
+        organizationId: orgId,
+        notes: { contains: id },
+      },
+    });
+    if (convertedSO) {
+      throw new BadRequestException(
+        `Cannot delete Estimate '${est.number}' because it has already been converted to Sales Order '${convertedSO.number}'.`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.estimateLine.deleteMany({ where: { estimateId: id } });
+      await tx.estimate.delete({ where: { id } });
+    });
+
+    return { success: true, message: `Estimate '${est.number}' deleted successfully.` };
+  }
+
   async createSalesOrder(orgId: string, dto: CreateSalesOrderDto) {
     const rawLines = Array.isArray(dto.lines) ? dto.lines.flat(2) : [];
     const linesToProcess = rawLines.filter((l: any) => l && l.productId && Number(l.quantity) > 0);
@@ -662,6 +689,59 @@ export class SalesService {
       where: { id },
       data: { status: "CANCELLED" },
     });
+  }
+
+  async deleteSalesOrder(orgId: string, id: string) {
+    const order = await this.prisma.salesOrder.findFirst({
+      where: { id, organizationId: orgId },
+      include: {
+        packages: true,
+        shipments: true,
+        invoices: true,
+        salesReturns: true,
+        lines: true,
+      },
+    });
+    if (!order) throw new NotFoundException("Sales order not found");
+
+    if (order.status === "FULFILLED") {
+      throw new BadRequestException(`Cannot delete Sales Order '${order.number}' because it is already fulfilled.`);
+    }
+
+    if (order.packages.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete Sales Order '${order.number}' because ${order.packages.length} package(s) have been generated. Delete or void packages first.`,
+      );
+    }
+
+    if (order.shipments.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete Sales Order '${order.number}' because ${order.shipments.length} shipment(s) have been generated.`,
+      );
+    }
+
+    if (order.invoices.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete Sales Order '${order.number}' because ${order.invoices.length} invoice(s) are attached to it.`,
+      );
+    }
+
+    if (order.salesReturns.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete Sales Order '${order.number}' because sales return records exist for it.`,
+      );
+    }
+
+    if (order.status === "CONFIRMED" || order.status === "PARTIALLY_FULFILLED") {
+      await this.inventory.releaseReservations(orgId, "sales_order", id);
+    }
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.salesOrderLine.deleteMany({ where: { salesOrderId: id } });
+      await tx.salesOrder.delete({ where: { id } });
+    });
+
+    return { success: true, message: `Sales Order '${order.number}' deleted successfully.` };
   }
 
   async createPackage(orgId: string, dto: PackageDto) {
