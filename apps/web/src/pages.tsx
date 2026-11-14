@@ -1415,7 +1415,10 @@ function DataTable<T extends Record<string, unknown>>({
   const [q, setQ] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "grid">(() => {
     try {
-      const saved = localStorage.getItem("app_view_mode_pref");
+      if (localStorage.getItem("preferred_view_mode")) localStorage.removeItem("preferred_view_mode");
+      if (localStorage.getItem("preferred_view_mode_v2")) localStorage.removeItem("preferred_view_mode_v2");
+      if (localStorage.getItem("app_view_mode_pref")) localStorage.removeItem("app_view_mode_pref");
+      const saved = sessionStorage.getItem("active_view_mode");
       if (saved === "table" || saved === "grid") return saved;
     } catch {}
     return "grid";
@@ -1425,7 +1428,7 @@ function DataTable<T extends Record<string, unknown>>({
   const setAndSaveViewMode = (mode: "table" | "grid") => {
     setViewMode(mode);
     try {
-      localStorage.setItem("app_view_mode_pref", mode);
+      sessionStorage.setItem("active_view_mode", mode);
     } catch {}
   };
 
@@ -1532,21 +1535,21 @@ function DataTable<T extends Record<string, unknown>>({
           <div style={{ display: "flex", background: "#f1f5f9", padding: 3, borderRadius: 10, border: "1px solid #e2e8f0", gap: 2 }}>
             <button
               type="button"
+              className={`btn btn-sm ${viewMode === "grid" ? "btn-primary" : "btn-ghost"}`}
+              style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
+              onClick={() => setAndSaveViewMode("grid")}
+              title="Grid View (Default)"
+            >
+              <LayoutGrid size={14} /> 🔲 Grid
+            </button>
+            <button
+              type="button"
               className={`btn btn-sm ${viewMode === "table" ? "btn-primary" : "btn-ghost"}`}
               style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
               onClick={() => setAndSaveViewMode("table")}
               title="Table View"
             >
               <List size={14} /> 📋 Table
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${viewMode === "grid" ? "btn-primary" : "btn-ghost"}`}
-              style={{ fontSize: 12, padding: "5px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}
-              onClick={() => setAndSaveViewMode("grid")}
-              title="Grid View"
-            >
-              <LayoutGrid size={14} /> 🔲 Grid
             </button>
           </div>
         </div>
