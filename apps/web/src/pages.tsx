@@ -2436,7 +2436,7 @@ function useList<T>(key: string, path: string) {
   });
 }
 
-function InfoTooltip({ text, align = "right" }: { text: string; align?: "left" | "right" | "center" }) {
+export function InfoTooltip({ text, align = "right" }: { text: string; align?: "left" | "right" | "center" }) {
   const [open, setOpen] = useState(false);
   const posStyle: React.CSSProperties =
     align === "left"
@@ -2446,22 +2446,24 @@ function InfoTooltip({ text, align = "right" }: { text: string; align?: "left" |
       : { right: 0 };
 
   return (
-    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>
       <button
         type="button"
         style={{
-          width: 20,
-          height: 20,
+          width: 18,
+          height: 18,
           padding: 0,
           borderRadius: "50%",
-          border: "none",
-          background: open ? "rgba(37, 99, 235, 0.15)" : "transparent",
-          color: open ? "#2563eb" : "var(--text-muted)",
+          border: "1px solid rgba(37, 99, 235, 0.25)",
+          background: open ? "rgba(37, 99, 235, 0.2)" : "rgba(37, 99, 235, 0.08)",
+          color: open ? "#1d4ed8" : "#2563eb",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
           transition: "all 0.15s ease",
+          marginLeft: 6,
+          flexShrink: 0,
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -2469,27 +2471,27 @@ function InfoTooltip({ text, align = "right" }: { text: string; align?: "left" |
         }}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
-        title="Click or hover for Thanglish explanation"
+        title="Click for Thanglish explanation"
       >
-        <HelpCircle size={14} />
+        <HelpCircle size={11} strokeWidth={2.5} />
       </button>
 
       {open && (
         <div
           style={{
             position: "absolute",
-            bottom: "100%",
+            bottom: "calc(100% + 6px)",
             ...posStyle,
-            marginBottom: 8,
-            width: 250,
+            width: 260,
+            maxWidth: "85vw",
             background: "#0f172a",
             color: "#f8fafc",
             fontSize: 12,
-            lineHeight: 1.45,
+            lineHeight: 1.5,
             padding: "9px 13px",
             borderRadius: 8,
             boxShadow: "0 10px 25px rgba(0,0,0,0.35)",
-            zIndex: 1000,
+            zIndex: 9999,
             textAlign: "left",
             pointerEvents: "none",
           }}
@@ -2777,7 +2779,10 @@ export function DashboardPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Sales</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Sales
+              <InfoTooltip text="Ungal factory/business-la customer-ku panna motha sales panam. Invoices & orders moolama vantha motha revenue thogai." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{money(totalSalesVal)}</span>
             </div>
@@ -2801,7 +2806,10 @@ export function DashboardPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Purchases</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Purchases
+              <InfoTooltip text="Vendors/suppliers kitta irunthu raw materials (wire rod, gas) & matha items vaangurathuku aana motha purchase selavu." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{money(totalPurchasesVal)}</span>
             </div>
@@ -2825,7 +2833,10 @@ export function DashboardPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Products</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Products
+              <InfoTooltip text="System-la register aana motha items count (Raw materials, Gas consumables, and Finished goods ellam serthu)." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{totalProductsCount}</span>
             </div>
@@ -2864,7 +2875,10 @@ export function DashboardPage() {
             </button>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Low Stock Items</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Low Stock Items
+              <InfoTooltip text="Godown-la reorder level-ku keezha koranja items count. Intha items seekiram theera pogudhu, udane purchase panna alert." align="right" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>{lowStockCount}</span>
             </div>
@@ -2885,6 +2899,7 @@ export function DashboardPage() {
           <div className="oscar-panel-header">
             <div className="oscar-panel-title">
               <BarChart3 size={18} color="#2563EB" /> Sales Overview
+              <InfoTooltip text="Intha maasathula sales revenue evlo vanthirukku vs raw materials purchase evlo pannirukom nu comparative monthly trend graph." align="left" />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, fontWeight: 600 }}>
@@ -2946,6 +2961,7 @@ export function DashboardPage() {
           <div className="oscar-panel-header">
             <div className="oscar-panel-title">
               <PieChartIcon size={18} color="#6366F1" /> Business Analytics
+              <InfoTooltip text="Sales revenue, purchase spend mattrum net business profit percentage-oda visual donut breakdown." align="left" />
             </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, background: "var(--surface-2)", padding: "3px 10px", borderRadius: 8, border: "1px solid var(--border)" }}>
               This Month ▾
@@ -3110,6 +3126,7 @@ export function DashboardPage() {
           <div className="oscar-panel-header">
             <div className="oscar-panel-title">
               🏆 Top Selling Products
+              <InfoTooltip text="Intha month customer athigama virumbi vaangina top fast-moving products and athaala vantha collection panam." align="left" />
             </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, background: "var(--surface-2)", padding: "3px 10px", borderRadius: 8, border: "1px solid var(--border)" }}>
               This Month ▾
@@ -3156,6 +3173,7 @@ export function DashboardPage() {
           <div className="oscar-panel-header">
             <div className="oscar-panel-title">
               <Package size={18} color="#2563EB" /> Stock Status
+              <InfoTooltip text="Godown-la irukura items-la ethana items nalla stock irukku (Green), ethana items koravaga irukku (Yellow), ethana mudinju pochu (Red) nu live status." align="left" />
             </div>
             <button
               type="button"
@@ -3245,6 +3263,7 @@ export function DashboardPage() {
           <div className="oscar-panel-header">
             <div className="oscar-panel-title">
               <CreditCard size={18} color="#2563EB" /> Pending Payments
+              <InfoTooltip text="Customers bill pottu innum ungaluku vara vendiya baaki thogai (receivables). Reminder anuppi collect pannikalam." align="left" />
             </div>
             <button
               type="button"
@@ -4567,7 +4586,10 @@ export function ProductsPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Products</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Products
+              <InfoTooltip text="Catalog-la register aana motha items count (Raw materials, Gas mattrum Finished goods ellam serthu)." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{totalProducts}</span>
             </div>
@@ -4591,7 +4613,10 @@ export function ProductsPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">In Stock</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              In Stock
+              <InfoTooltip text="Godown-la podhumana safe level-la stock irukura items count. Customer ketta udane deliver panna mudiyum." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#10B981" }}>213</span>
             </div>
@@ -4615,7 +4640,10 @@ export function ProductsPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Low Stock</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Low Stock
+              <InfoTooltip text="Stock koranja items. Intha items theera poguthu, udane purchase/produce panna ready aaganum nu alert." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>12</span>
             </div>
@@ -4639,7 +4667,10 @@ export function ProductsPage() {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Out of Stock</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Out of Stock
+              <InfoTooltip text="Zero stock aana items! Godown-la item kaali aagiduchu, sales panna mudiyadhu nu red warning." align="right" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#DC2626" }}>20</span>
             </div>
@@ -5322,7 +5353,10 @@ export function WarehousesPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Active</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Facilities</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Facilities
+              <InfoTooltip text="Unga business-la register panna motha godowns & factory storage units எண்ணிக்கை." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{(list.data ?? []).length || 3}</span>
             </div>
@@ -5343,7 +5377,10 @@ export function WarehousesPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> 100%</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Active Storage Hubs</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Active Storage Hubs
+              <InfoTooltip text="Tharpothu active-aa stock vachu operate aagura storage godowns count." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{(list.data ?? []).length || 3}</span>
             </div>
@@ -5364,7 +5401,10 @@ export function WarehousesPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Hubs</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Regional Locations</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Regional Locations
+              <InfoTooltip text="Intha godowns amainthulla geographic state / district region details." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#7C3AED" }}>Tamil Nadu</span>
             </div>
@@ -5385,7 +5425,10 @@ export function WarehousesPage() {
             <span className="oscar-trend-pill neutral" style={{ background: "#FFEDD5", color: "#EA580C" }}>Units</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Stock Housed</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Stock Housed
+              <InfoTooltip text="Ella godowns-layum mothama serthu irukura items & finished units-oda total quantity." align="right" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>1,450 pcs</span>
             </div>
@@ -5638,7 +5681,10 @@ export function InventoryPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Live</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Stock Ledger Items</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Stock Ledger Items
+              <InfoTooltip text="Inventory ledger-la track aagura distinct item & warehouse combination entries." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{filteredList.length}</span>
             </div>
@@ -5659,7 +5705,10 @@ export function InventoryPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Healthy</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Well-Stocked Items</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Well-Stocked Items
+              <InfoTooltip text="Nalla safe level-la podhumana alavu stock irukura items (Safe buffer stock)." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#10B981" }}>
                 {filteredList.filter((r) => Number(r.quantity) > 10).length}
@@ -5682,7 +5731,10 @@ export function InventoryPage() {
             <span className="oscar-trend-pill positive" style={{ background: "#FFEDD5", color: "#EA580C" }}>Reorder</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Low Stock Warnings</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Low Stock Warnings
+              <InfoTooltip text="Theera pora tharuvayil ulla items. Intha items-ai seekiram purchase panni godown-la replenish pannanum." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>
                 {filteredList.filter((r) => Number(r.quantity) <= 10 && Number(r.quantity) > 0).length}
@@ -5705,7 +5757,10 @@ export function InventoryPage() {
             <span className="oscar-trend-pill neutral" style={{ background: "#FEE2E2", color: "#DC2626" }}>Alert</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Zero Stock Count</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Zero Stock Count
+              <InfoTooltip text="Muthalodu kaali aana items. Stock zero aagiyiruku, customer ketta deliver panna mudiyaadhu." align="right" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#DC2626" }}>
                 {filteredList.filter((r) => Number(r.quantity) <= 0).length}
@@ -7214,7 +7269,10 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">{isCustomer ? "Total Customers" : "Total Vendors"}</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              {isCustomer ? "Total Customers" : "Total Vendors"}
+              <InfoTooltip text={isCustomer ? "Ungaloda business kooda associate aana motha buyers / customers directory." : "Raw material, gas, matha supplies thara suppliers / vendors directory."} align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{(list.data ?? []).length}</span>
             </div>
@@ -7238,7 +7296,10 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">{isCustomer ? "Active Accounts" : "Active Suppliers"}</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              {isCustomer ? "Active Accounts" : "Active Suppliers"}
+              <InfoTooltip text={isCustomer ? "Thodarnthu orders & transactions seiyura regular active buyers." : "Regularkku purchase podura active vendors."} align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{(list.data ?? []).length}</span>
             </div>
@@ -7262,7 +7323,10 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">GST Registered</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              GST Registered
+              <InfoTooltip text="Valid GSTIN number register panni formal B2B invoice vaangura parties count." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#7C3AED" }}>
                 {(list.data ?? []).filter((p) => !!p.gstin).length}
@@ -7288,7 +7352,10 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
             </span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">{isCustomer ? "Outstanding Balance" : "Bills Balance Due"}</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              {isCustomer ? "Outstanding Balance" : "Bills Balance Due"}
+              <InfoTooltip text={isCustomer ? "Customers kitta irunthu ungalukku vara vendiya motha pending panam." : "Vendors-ku neenga panna vendiya motha pending payment."} align="right" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>
                 {isCustomer ? "₹1,45,000" : "₹78,300"}
@@ -8916,7 +8983,10 @@ export function SalesOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Live</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Sales Orders</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Sales Orders
+              <InfoTooltip text="Customers pottirukkira motha sales orders count." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{totalOrders}</span>
             </div>
@@ -8937,7 +9007,10 @@ export function SalesOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Active</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Confirmed / In Process</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Confirmed / In Process
+              <InfoTooltip text="Order confirm aagi, godown-la packing & dispatch process-la irukkira pending orders." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#D97706" }}>{confirmedOrders}</span>
             </div>
@@ -8958,7 +9031,10 @@ export function SalesOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Completed</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Fulfilled & Shipped</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Fulfilled & Shipped
+              <InfoTooltip text="Lorry/vehicle moolama goods pack panni customer-ku successfully dispatch aana orders." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{fulfilledOrders}</span>
             </div>
@@ -8979,7 +9055,10 @@ export function SalesOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Orders Value</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Orders Value
+              <InfoTooltip text="Intha sales orders moolama ungalukku vara vendiya motha booking amount (₹)." align="right" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#4F46E5", fontSize: 20 }}>{money(totalSalesVal)}</span>
             </div>
@@ -10079,7 +10158,10 @@ export function InvoicesPage() {
               <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Issued</span>
             </div>
             <div className="oscar-kpi-info">
-              <span className="oscar-kpi-label">Invoices Count</span>
+              <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+                Invoices Count
+                <InfoTooltip text="Generate panni anuppiya motha tax invoices எண்ணிக்கை." align="left" />
+              </span>
               <div className="oscar-kpi-value-row">
                 <span className="oscar-kpi-val">{filteredInvoices.length}</span>
               </div>
@@ -10100,7 +10182,10 @@ export function InvoicesPage() {
               <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
             </div>
             <div className="oscar-kpi-info">
-              <span className="oscar-kpi-label">Total Invoiced Sales</span>
+              <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+                Total Invoiced Sales
+                <InfoTooltip text="Tax invoices moolama billed aana motha sales value (GST serthu)." align="left" />
+              </span>
               <div className="oscar-kpi-value-row">
                 <span className="oscar-kpi-val" style={{ color: "#4F46E5", fontSize: 20 }}>{money(custTotalSales)}</span>
               </div>
@@ -10121,7 +10206,10 @@ export function InvoicesPage() {
               <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Collected</span>
             </div>
             <div className="oscar-kpi-info">
-              <span className="oscar-kpi-label">Amount Collected</span>
+              <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+                Amount Collected
+                <InfoTooltip text="Customers kitta irunthu bank / UPI / cash moolama actual-ah kaiyil vantha panam." align="left" />
+              </span>
               <div className="oscar-kpi-value-row">
                 <span className="oscar-kpi-val" style={{ color: "#059669", fontSize: 20 }}>{money(custTotalPaid)}</span>
               </div>
@@ -10142,7 +10230,10 @@ export function InvoicesPage() {
               <span className="oscar-trend-pill positive" style={{ color: "#DC2626", background: "#FEF2F2" }}><TrendingUp size={12} /> Balance</span>
             </div>
             <div className="oscar-kpi-info">
-              <span className="oscar-kpi-label">Outstanding Balance</span>
+              <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+                Outstanding Balance
+                <InfoTooltip text="Customers innum kudukka vendiya pending thogai (Arrears / Balance Due)." align="right" />
+              </span>
               <div className="oscar-kpi-value-row">
                 <span className="oscar-kpi-val" style={{ color: "#DC2626", fontSize: 20 }}>{money(custBalanceDue)}</span>
               </div>
@@ -10317,7 +10408,10 @@ export function PaymentsPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Received</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Collected</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Collected
+              <InfoTooltip text="Customers kitta irunthu ithuvarai collect aana motha settlement thogai." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#059669", fontSize: 20 }}>{money(totalCollected)}</span>
             </div>
@@ -10338,7 +10432,10 @@ export function PaymentsPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Pending</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Open Invoices</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Open Invoices
+              <InfoTooltip text="Innum full payment varamal balance irukkira invoices ennikkai." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#D97706" }}>{openInvoices.length}</span>
             </div>
@@ -10359,7 +10456,10 @@ export function PaymentsPage() {
             <span className="oscar-trend-pill positive" style={{ color: "#DC2626", background: "#FEF2F2" }}><TrendingUp size={12} /> Due</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Outstanding Receivables</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Outstanding Receivables
+              <InfoTooltip text="Innum market-la customers kitta irunthu vara vendiya motha pending baaki." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#DC2626", fontSize: 20 }}>{money(totalPendingDue)}</span>
             </div>
@@ -10380,7 +10480,10 @@ export function PaymentsPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Transactions</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Transactions
+              <InfoTooltip text="Ithuvarai record aana motha payment entries / receipts count." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#2563EB" }}>{allPayments.length}</span>
             </div>
@@ -10812,7 +10915,10 @@ export function PurchaseOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Live</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Purchase Orders</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Purchase Orders
+              <InfoTooltip text="Vendors-kitta raw materials & items vaanga potta motha purchase orders count." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val">{totalPOs}</span>
             </div>
@@ -10833,7 +10939,10 @@ export function PurchaseOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> In Transit</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Issued / Sent Orders</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Issued / Sent Orders
+              <InfoTooltip text="Vendor-ku anuppiya aana innum godown-ku lorry/materials vandhu seratha pending orders." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#D97706" }}>{issuedPOs}</span>
             </div>
@@ -10854,7 +10963,10 @@ export function PurchaseOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Received</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Stock Received & Done</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Stock Received & Done
+              <InfoTooltip text="Godown-la materials deliver aagi, physical stock verify panni load seiyapatta PO-kal." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{receivedPOs}</span>
             </div>
@@ -10875,7 +10987,10 @@ export function PurchaseOrdersPage() {
             <span className="oscar-trend-pill positive"><TrendingUp size={12} /> Total</span>
           </div>
           <div className="oscar-kpi-info">
-            <span className="oscar-kpi-label">Total Purchase Value</span>
+            <span className="oscar-kpi-label" style={{ display: "inline-flex", alignItems: "center" }}>
+              Total Purchase Value
+              <InfoTooltip text="Intha purchase orders-oda motha raw material procurement value (₹)." align="left" />
+            </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#4F46E5", fontSize: 20 }}>{money(totalPurchaseVal)}</span>
             </div>
@@ -11461,7 +11576,10 @@ export function ReportsPage() {
         {/* Inventory valuation */}
         <div className="card">
           <div className="card-header">
-            <span style={{ fontWeight: 600 }}>Inventory Valuation</span>
+            <span style={{ fontWeight: 600, display: "inline-flex", alignItems: "center" }}>
+              Inventory Valuation
+              <InfoTooltip text="Godown-la irukura motha sothu madhippu (Total Asset Value). Cost price × available quantity calculation." align="left" />
+            </span>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Cost × Quantity on hand</span>
           </div>
           {inv.isLoading ? (
@@ -11492,7 +11610,10 @@ export function ReportsPage() {
           <div className="card-header">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <AlertTriangle size={16} color="var(--warning)" />
-              <span style={{ fontWeight: 600 }}>Low Stock Alerts</span>
+              <span style={{ fontWeight: 600, display: "inline-flex", alignItems: "center" }}>
+                Low Stock Alerts
+                <InfoTooltip text="Reorder level-ku keezha poona items list. Production thadaipadaama irukka udane order poda vendiyavai." align="left" />
+              </span>
             </div>
             <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Items below reorder level</span>
           </div>
@@ -11775,10 +11896,10 @@ export function BillsPage() {
 
       {/* Summary metric bar */}
       <div className="metrics-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 20 }}>
-        <MetricCard label="Total Billed" value={money(totalBilled)} icon={FileText} color="#7c3aed" />
-        <MetricCard label="Amount Paid" value={money(totalPaid)} icon={CheckCircle} color="#16a34a" />
-        <MetricCard label="Balance Due" value={money(totalDue)} icon={CreditCard} color="#dc2626" />
-        <MetricCard label="Overdue Bills" value={overdueCnt} icon={AlertTriangle} color="#d97706" />
+        <MetricCard label="Total Billed" value={money(totalBilled)} icon={FileText} color="#7c3aed" help="Vendors kitta irunthu vantha motha raw material bills thogai." />
+        <MetricCard label="Amount Paid" value={money(totalPaid)} icon={CheckCircle} color="#16a34a" help="Bank transfer, cash, UPI moolama vendor-ku neenga settle panna panam." />
+        <MetricCard label="Balance Due" value={money(totalDue)} icon={CreditCard} color="#dc2626" help="Vendors-ku neenga innum kudukka vendiya baaki thogai (Accounts Payable)." />
+        <MetricCard label="Overdue Bills" value={overdueCnt} icon={AlertTriangle} color="#d97706" help="Payment due date thaandi innum pay pannama irukkira urgent bills count." />
       </div>
 
       {/* Bills table */}
@@ -12659,19 +12780,28 @@ export function ManufacturingPage() {
             {/* KPI Cards */}
             <div className="m-cards-grid">
               <div className="card" style={{ padding: 14, borderLeft: "4px solid #10b981" }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Total Produced</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, display: "inline-flex", alignItems: "center" }}>
+                  Total Produced
+                  <InfoTooltip text="Intha maasathula mothama manufacture panni mudicha finished product packs count." align="left" />
+                </span>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#059669", marginTop: 4 }}>
                   {monthlyAnalytics.data?.kpis?.totalProducedPacks ?? 0} <span style={{ fontSize: 13 }}>Packs</span>
                 </div>
               </div>
               <div className="card" style={{ padding: 14, borderLeft: "4px solid #6366f1" }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Material Efficiency</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, display: "inline-flex", alignItems: "center" }}>
+                  Material Efficiency
+                  <InfoTooltip text="Raw materials sariyaana alavil use aagi production successful-aa nadantha efficiency sathavigam (%)." align="left" />
+                </span>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#4f46e5", marginTop: 4 }}>
                   {monthlyAnalytics.data?.kpis?.overallEfficiencyPercent ?? 98.5}%
                 </div>
               </div>
               <div className="card" style={{ padding: 14, borderLeft: "4px solid #ef4444" }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>Wastage Loss (₹)</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, display: "inline-flex", alignItems: "center" }}>
+                  Wastage Loss (₹)
+                  <InfoTooltip text="Production podhum pothu raw materials waste aanathala factory-ku vantha motha panam ilappu (loss)." align="left" />
+                </span>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#dc2626", marginTop: 4 }}>
                   ₹{(monthlyAnalytics.data?.kpis?.totalWastageCostLoss ?? 0).toLocaleString()}
                 </div>
