@@ -16,6 +16,7 @@ import {
   useState,
   useMemo,
 } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -108,7 +109,7 @@ function ToastProvider({ children }: { children: ReactNode }) {
 // ─────────────────────────────────────────────────────────
 // PUBLIC LIVE APPLICATION URL HELPER
 // ─────────────────────────────────────────────────────────
-export const getPublicAppUrl = (): string => {
+const getPublicAppUrl = (): string => {
   const envUrl = (import.meta.env.VITE_APP_URL || "").trim();
   if (envUrl && envUrl !== "undefined" && envUrl.startsWith("http")) {
     return envUrl.replace(/\/$/, "");
@@ -2438,25 +2439,71 @@ function useList<T>(key: string, path: string) {
 
 export function InfoTooltip({ text, align = "right" }: { text: string; align?: "left" | "right" | "center" }) {
   const [open, setOpen] = useState(false);
-  const posStyle: React.CSSProperties =
-    align === "left"
-      ? { left: 0 }
-      : align === "center"
-      ? { left: "50%", transform: "translateX(-50%)" }
-      : { right: 0 };
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; placeAbove: boolean } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const tooltipWidth = Math.min(290, window.innerWidth - 24);
+    const placeAbove = rect.top > 170;
+    const top = placeAbove ? rect.top - 8 : rect.bottom + 8;
+    let left =
+      align === "left"
+        ? rect.left
+        : align === "center"
+        ? rect.left + rect.width / 2 - tooltipWidth / 2
+        : rect.right - tooltipWidth;
+    left = Math.max(12, Math.min(window.innerWidth - tooltipWidth - 12, left));
+    setCoords({ top, left, placeAbove });
+  }, [align]);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!open) {
+      updatePosition();
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  };
+
+  const handleMouseEnter = () => {
+    updatePosition();
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handleScrollOrResize = () => updatePosition();
+    const handleClickOutside = (e: MouseEvent) => {
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open, updatePosition]);
 
   return (
     <div style={{ position: "relative", display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>
       <button
+        ref={btnRef}
         type="button"
         style={{
-          width: 18,
-          height: 18,
+          width: 20,
+          height: 20,
           padding: 0,
           borderRadius: "50%",
-          border: "1px solid rgba(37, 99, 235, 0.25)",
-          background: open ? "rgba(37, 99, 235, 0.2)" : "rgba(37, 99, 235, 0.08)",
-          color: open ? "#1d4ed8" : "#2563eb",
+          border: open ? "1.5px solid #2563eb" : "1.5px solid #60a5fa",
+          background: open ? "#2563eb" : "#eff6ff",
+          color: open ? "#ffffff" : "#2563eb",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
@@ -2464,43 +2511,67 @@ export function InfoTooltip({ text, align = "right" }: { text: string; align?: "
           transition: "all 0.15s ease",
           marginLeft: 6,
           flexShrink: 0,
+          boxShadow: open ? "0 0 0 3px rgba(37,99,235,0.25)" : "0 1px 3px rgba(0,0,0,0.06)",
         }}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(!open);
-        }}
-        onMouseEnter={() => setOpen(true)}
+        onClick={toggle}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setOpen(false)}
-        title="Click for Thanglish explanation"
+        title="💡 Click for Thanglish explanation"
+        aria-label="Thanglish Explanation"
       >
-        <HelpCircle size={11} strokeWidth={2.5} />
+        <HelpCircle size={12} strokeWidth={2.6} />
       </button>
 
-      {open && (
+      {open && coords && typeof document !== "undefined" && createPortal(
         <div
           style={{
-            position: "absolute",
-            bottom: "calc(100% + 6px)",
-            ...posStyle,
-            width: 260,
-            maxWidth: "85vw",
+            position: "fixed",
+            top: coords.top,
+            left: coords.left,
+            transform: coords.placeAbove ? "translateY(-100%)" : "none",
+            width: 290,
+            maxWidth: "calc(100vw - 24px)",
             background: "#0f172a",
             color: "#f8fafc",
-            fontSize: 12,
-            lineHeight: 1.5,
-            padding: "9px 13px",
-            borderRadius: 8,
-            boxShadow: "0 10px 25px rgba(0,0,0,0.35)",
-            zIndex: 9999,
+            fontSize: 12.5,
+            lineHeight: 1.55,
+            padding: "10px 14px",
+            borderRadius: 10,
+            boxShadow: "0 20px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.12)",
+            zIndex: 999999,
             textAlign: "left",
-            pointerEvents: "none",
           }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ fontWeight: 700, color: "#93c5fd", marginBottom: 3, fontSize: 11, letterSpacing: 0.3 }}>
-            💡 THANGLISH EXPLANATION:
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontWeight: 800, color: "#60a5fa", fontSize: 11, letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 5 }}>
+              <span>💡</span> THANGLISH VILAKKAM:
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#94a3b8",
+                cursor: "pointer",
+                padding: "0 2px",
+                fontSize: 14,
+                lineHeight: 1,
+              }}
+              title="Close"
+            >
+              ✕
+            </button>
           </div>
-          {text}
-        </div>
+          <div style={{ color: "#e2e8f0" }}>
+            {text}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -2765,6 +2836,31 @@ export function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── Thanglish Explanation Active Banner ── */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
+          border: "1px solid #bfdbfe",
+          borderRadius: 14,
+          padding: "10px 16px",
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#2563eb", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
+            💡
+          </div>
+          <div style={{ fontSize: 13, color: "#1e3a8a", lineHeight: 1.4 }}>
+            <strong>Thanglish Explanation Feature Active:</strong> Keela ovvoru count & metric pakkathulayum ulla blue <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "#eff6ff", border: "1.5px solid #60a5fa", color: "#2563eb", fontSize: 11, fontWeight: 800, margin: "0 3px", verticalAlign: "middle" }}>?</span> icon-ai click / hover seithal, antha count-oda thelivaana vilakkam thondrum.
+          </div>
+        </div>
+      </div>
 
       {/* ── ROW 1: 4 Top Elevated KPI Cards ── */}
       <div className="oscar-kpi-grid">
