@@ -3822,7 +3822,15 @@ type Product = {
   reorderLevel: string;
   description?: string;
   isActive?: boolean;
+  stocks?: Array<{ id?: string; quantity?: number; warehouseId?: string }>;
 };
+
+function getProductStock(p: Product): number {
+  if (Array.isArray(p.stocks) && p.stocks.length > 0) {
+    return p.stocks.reduce((acc, s) => acc + Number(s.quantity ?? 0), 0);
+  }
+  return 0;
+}
 
 export function ProductsPage() {
   const qc = useQueryClient();
@@ -4194,7 +4202,7 @@ export function ProductsPage() {
       label: "Stock Qty",
       align: "center",
       render: (r) => {
-        const stock = r.reorderLevel ? Number(r.reorderLevel) * 10 : 50;
+        const stock = getProductStock(r);
         return <span style={{ fontWeight: 600 }}>{stock}</span>;
       },
     },
@@ -4204,8 +4212,10 @@ export function ProductsPage() {
         if (r.isActive === false) {
           return <span style={{ background: "#FEE2E2", color: "#DC2626", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Archived</span>;
         }
-        const isLow = Number(r.reorderLevel) > 10;
-        const isOut = Number(r.reorderLevel) === 0;
+        const stock = getProductStock(r);
+        const reorder = Number(r.reorderLevel ?? 0);
+        const isOut = stock <= 0;
+        const isLow = stock > 0 && (reorder > 0 ? stock <= reorder : stock <= 5);
         if (isOut) {
           return <span style={{ background: "#FEE2E2", color: "#DC2626", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>Out of Stock</span>;
         }
@@ -4268,9 +4278,10 @@ export function ProductsPage() {
   const renderProductGridCard = (p: Product, idx: number, isSelected: boolean, onToggleSelect: () => void) => {
     const cat = getProductCategory(p);
     const icon = getProductIcon(p);
-    const stockQty = p.reorderLevel ? Number(p.reorderLevel) * 10 : 50;
+    const stockQty = getProductStock(p);
+    const reorder = Number(p.reorderLevel ?? 0);
     const isOut = stockQty <= 0;
-    const isLow = stockQty <= 10;
+    const isLow = stockQty > 0 && (reorder > 0 ? stockQty <= reorder : stockQty <= 5);
 
     let badgeClass = "in-stock";
     let badgeText = "In Stock";
@@ -4433,7 +4444,26 @@ export function ProductsPage() {
     );
   };
 
-  const totalProducts = (products.data ?? []).length || 245;
+  const allProds = products.data ?? [];
+  const totalProducts = allProds.length;
+  const inStockCount = allProds.filter((p) => {
+    if (p.isActive === false) return false;
+    const s = getProductStock(p);
+    const r = Number(p.reorderLevel ?? 0);
+    return r > 0 ? s > r : s > 0;
+  }).length;
+  const lowStockCount = allProds.filter((p) => {
+    if (p.isActive === false) return false;
+    const s = getProductStock(p);
+    const r = Number(p.reorderLevel ?? 0);
+    return s > 0 && (r > 0 ? s <= r : s <= 5);
+  }).length;
+  const outOfStockCount = allProds.filter((p) => {
+    if (p.isActive === false) return false;
+    const s = getProductStock(p);
+    return s <= 0;
+  }).length;
+
   const isMobile = useIsMobile();
   const [mSearch, setMSearch] = useState("");
 
@@ -4463,19 +4493,19 @@ export function ProductsPage() {
           </div>
           <div className="m-kpi-pill">
             <div className="m-kpi-val" style={{ color: "#16A34A" }}>
-              {(filteredData.filter((p) => Number(p.reorderLevel ?? 0) > 0 && Number(p.reorderLevel ?? 0) <= 10)).length}
+              {inStockCount}
             </div>
             <div className="m-kpi-lbl">In Stock</div>
           </div>
           <div className="m-kpi-pill">
             <div className="m-kpi-val" style={{ color: "#F59E0B" }}>
-              {filteredData.filter((p) => Number(p.reorderLevel ?? 0) > 10).length}
+              {lowStockCount}
             </div>
             <div className="m-kpi-lbl">Low Stock</div>
           </div>
           <div className="m-kpi-pill">
             <div className="m-kpi-val" style={{ color: "#EF4444" }}>
-              {filteredData.filter((p) => Number(p.reorderLevel ?? 0) === 0).length}
+              {outOfStockCount}
             </div>
             <div className="m-kpi-lbl">Out of Stock</div>
           </div>
@@ -4751,7 +4781,7 @@ export function ProductsPage() {
               <Package size={22} color="#fff" />
             </div>
             <span className={`oscar-trend-pill ${totalProducts > 0 ? "positive" : "neutral"}`}>
-              <TrendingUp size={12} /> {totalProducts > 0 ? "8.2%" : "0%"}
+              <TrendingUp size={12} /> {totalProducts > 0 ? "100%" : "0%"}
             </span>
           </div>
           <div className="oscar-kpi-info">
@@ -4777,8 +4807,8 @@ export function ProductsPage() {
             <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
               <CheckCircle size={22} color="#fff" />
             </div>
-            <span className="oscar-trend-pill positive">
-              <TrendingUp size={12} /> 5.1%
+            <span className={`oscar-trend-pill ${inStockCount > 0 ? "positive" : "neutral"}`}>
+              <TrendingUp size={12} /> {totalProducts > 0 ? `${Math.round((inStockCount / totalProducts) * 100)}%` : "0%"}
             </span>
           </div>
           <div className="oscar-kpi-info">
@@ -4787,7 +4817,7 @@ export function ProductsPage() {
               <InfoTooltip text="Godown-la podhumana safe level-la stock irukura items count. Customer ketta udane deliver panna mudiyum." align="left" />
             </span>
             <div className="oscar-kpi-value-row">
-              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>213</span>
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{inStockCount}</span>
             </div>
           </div>
           <div className="oscar-kpi-sparkline">
@@ -4804,8 +4834,8 @@ export function ProductsPage() {
             <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)" }}>
               <AlertTriangle size={22} color="#fff" />
             </div>
-            <span className="oscar-trend-pill positive" style={{ background: "#FFEDD5", color: "#EA580C" }}>
-              <TrendingDown size={12} /> 2.3%
+            <span className={`oscar-trend-pill ${lowStockCount > 0 ? "negative" : "neutral"}`} style={{ background: lowStockCount > 0 ? "#FFEDD5" : "var(--surface-2)", color: lowStockCount > 0 ? "#EA580C" : "var(--text-muted)" }}>
+              <TrendingDown size={12} /> {lowStockCount}
             </span>
           </div>
           <div className="oscar-kpi-info">
@@ -4814,7 +4844,7 @@ export function ProductsPage() {
               <InfoTooltip text="Stock koranja items. Intha items theera poguthu, udane purchase/produce panna ready aaganum nu alert." align="left" />
             </span>
             <div className="oscar-kpi-value-row">
-              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>12</span>
+              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>{lowStockCount}</span>
             </div>
           </div>
           <div className="oscar-kpi-sparkline">
@@ -4831,8 +4861,8 @@ export function ProductsPage() {
             <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)" }}>
               <XCircle size={22} color="#fff" />
             </div>
-            <span className="oscar-trend-pill neutral" style={{ background: "#FEE2E2", color: "#DC2626" }}>
-              <TrendingUp size={12} /> 1.0%
+            <span className={`oscar-trend-pill ${outOfStockCount > 0 ? "negative" : "neutral"}`} style={{ background: outOfStockCount > 0 ? "#FEE2E2" : "var(--surface-2)", color: outOfStockCount > 0 ? "#DC2626" : "var(--text-muted)" }}>
+              <TrendingUp size={12} /> {outOfStockCount}
             </span>
           </div>
           <div className="oscar-kpi-info">
@@ -4841,7 +4871,7 @@ export function ProductsPage() {
               <InfoTooltip text="Zero stock aana items! Godown-la item kaali aagiduchu, sales panna mudiyadhu nu red warning." align="right" />
             </span>
             <div className="oscar-kpi-value-row">
-              <span className="oscar-kpi-val" style={{ color: "#DC2626" }}>20</span>
+              <span className="oscar-kpi-val" style={{ color: "#DC2626" }}>{outOfStockCount}</span>
             </div>
           </div>
           <div className="oscar-kpi-sparkline">
@@ -5527,7 +5557,7 @@ export function WarehousesPage() {
               <InfoTooltip text="Unga business-la register panna motha godowns & factory storage units எண்ணிக்கை." align="left" />
             </span>
             <div className="oscar-kpi-value-row">
-              <span className="oscar-kpi-val">{(list.data ?? []).length || 3}</span>
+              <span className="oscar-kpi-val">{(list.data ?? []).length}</span>
             </div>
           </div>
           <div className="oscar-kpi-sparkline">
@@ -5551,7 +5581,7 @@ export function WarehousesPage() {
               <InfoTooltip text="Tharpothu active-aa stock vachu operate aagura storage godowns count." align="left" />
             </span>
             <div className="oscar-kpi-value-row">
-              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{(list.data ?? []).length || 3}</span>
+              <span className="oscar-kpi-val" style={{ color: "#10B981" }}>{(list.data ?? []).length}</span>
             </div>
           </div>
           <div className="oscar-kpi-sparkline">
@@ -5599,7 +5629,7 @@ export function WarehousesPage() {
               <InfoTooltip text="Ella godowns-layum mothama serthu irukura items & finished units-oda total quantity." align="right" />
             </span>
             <div className="oscar-kpi-value-row">
-              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>1,450 pcs</span>
+              <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>{(list.data ?? []).length > 0 ? `${(list.data ?? []).length} Hubs` : "0 Hubs"}</span>
             </div>
           </div>
           <div className="oscar-kpi-sparkline">
@@ -7527,7 +7557,7 @@ export function PartiesPage({ kind }: { kind: "customers" | "vendors" }) {
             </span>
             <div className="oscar-kpi-value-row">
               <span className="oscar-kpi-val" style={{ color: "#EA580C" }}>
-                {isCustomer ? "₹1,45,000" : "₹78,300"}
+                {money((list.data ?? []).reduce((sum, p) => sum + (Number((p as any).balance ?? (p as any).outstandingBalance ?? 0)), 0))}
               </span>
             </div>
           </div>
