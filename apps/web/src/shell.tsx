@@ -295,38 +295,40 @@ export function AppShell() {
       {!isMobile && (
         <aside className="sidebar desktop-sidebar" aria-label="Sidebar Navigation">
           {/* Brand Header */}
-          <div className="sidebar-logo">
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-              <div
+          <div className="sidebar-logo" style={{ padding: "14px 16px" }}>
+            <NavLink to="/" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, textDecoration: "none" }}>
+              <img
+                src="/oscar-icon.png"
+                alt="Oscar Auto Flux Logo"
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 12,
-                  background: "linear-gradient(135deg, #5146E5 0%, #6366F1 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 4px 14px rgba(81, 70, 229, 0.45)",
+                  width: 36,
+                  height: 36,
+                  objectFit: "contain",
                   flexShrink: 0,
+                  filter: "drop-shadow(0 2px 10px rgba(59, 130, 246, 0.5))",
                 }}
-              >
-                <ShoppingCart size={20} color="#ffffff" />
-              </div>
+              />
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 18,
-                    fontWeight: 800,
+                    fontSize: 17,
+                    fontWeight: 900,
                     color: "#ffffff",
-                    letterSpacing: "-0.4px",
-                    lineHeight: 1.2,
+                    letterSpacing: "0.4px",
+                    lineHeight: 1.15,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                   }}
                 >
-                  Oscar
+                  <span>OSCAR</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.1, color: "#60a5fa", background: "rgba(37,99,235,0.22)", border: "1px solid rgba(96,165,250,0.3)", padding: "1px 5px", borderRadius: 4 }}>
+                    AUTO FLUX
+                  </span>
                 </div>
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 10.5,
                     color: "#94A3B8",
                     fontWeight: 500,
                     marginTop: 2,
@@ -335,10 +337,10 @@ export function AppShell() {
                     textOverflow: "ellipsis",
                   }}
                 >
-                  Inventory Operations
+                  Inventory & Billing
                 </div>
               </div>
-            </div>
+            </NavLink>
             <button
               className="sidebar-close-btn"
               onClick={closeSidebar}
@@ -585,12 +587,25 @@ export function AppShell() {
         >
           {/* Header with Oscar branding and actions */}
           <div className="m-menu-header">
-            <div className="m-menu-brand">
-              <div className="m-menu-brand-icon">
-                <ShoppingCart size={20} color="#FFFFFF" />
-              </div>
+            <div className="m-menu-brand" onClick={() => { closeSidebar(); nav("/"); }} style={{ cursor: "pointer" }}>
+              <img
+                src="/oscar-icon.png"
+                alt="Oscar Auto Flux"
+                style={{
+                  width: 40,
+                  height: 40,
+                  objectFit: "contain",
+                  flexShrink: 0,
+                  filter: "drop-shadow(0 2px 8px rgba(37, 99, 235, 0.4))",
+                }}
+              />
               <div>
-                <h2 className="m-menu-brand-title">Oscar</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <h2 className="m-menu-brand-title" style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>Oscar</h2>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: "#2563eb", background: "#dbeafe", padding: "1px 6px", borderRadius: 4 }}>
+                    AUTO FLUX
+                  </span>
+                </div>
                 <div className="m-menu-brand-sub">Inventory &amp; Billing</div>
               </div>
             </div>
@@ -813,13 +828,20 @@ export function AppShell() {
             {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
 
-          <div className="mobile-topbar-logo">
-            <ShoppingCart size={19} color="#5146E5" />
-            <span>Oscar</span>
+          <NavLink to="/" className="mobile-topbar-logo" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 7 }}>
+            <img
+              src="/oscar-icon.png"
+              alt="Oscar"
+              style={{ width: 22, height: 22, objectFit: "contain", flexShrink: 0 }}
+            />
+            <span style={{ fontWeight: 800 }}>Oscar</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#2563eb", background: "rgba(37,99,235,0.1)", padding: "1px 5px", borderRadius: 4 }}>
+              AUTO FLUX
+            </span>
             {user?.organization?.name && (
               <span className="mobile-topbar-org">{user.organization.name}</span>
             )}
-          </div>
+          </NavLink>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button

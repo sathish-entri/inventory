@@ -172,9 +172,17 @@ export function LoginPage() {
       {/* Left branding panel */}
       <div className="auth-panel-left">
         <div style={{ marginBottom: 48 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-            <Boxes size={36} color="#5b9bf8" />
-            <span style={{ fontSize: 28, fontWeight: 800, color: "#fff", letterSpacing: -0.5 }}>Oscar</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+            <img
+              src="/oscar-logo.png"
+              alt="Oscar Auto Flux"
+              style={{
+                height: 52,
+                maxWidth: 280,
+                objectFit: "contain",
+                filter: "drop-shadow(0 4px 16px rgba(37, 99, 235, 0.4))",
+              }}
+            />
           </div>
           <h2 style={{ fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1.2, marginBottom: 16 }}>
             Complete Inventory<br />Management System
@@ -197,9 +205,18 @@ export function LoginPage() {
       {/* Right form panel */}
       <div className="auth-panel-right">
         <div className="auth-card">
-          <div className="auth-mobile-header">
-            <Boxes size={32} color="#1565d8" />
-            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Oscar</span>
+          <div className="auth-mobile-header" style={{ textAlign: "center", marginBottom: 16 }}>
+            <img
+              src="/oscar-logo.png"
+              alt="Oscar Auto Flux"
+              style={{
+                height: 44,
+                maxWidth: 240,
+                objectFit: "contain",
+                margin: "0 auto",
+                display: "block",
+              }}
+            />
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Sign in</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 28, fontSize: 14 }}>
@@ -310,8 +327,16 @@ export function RegisterPage() {
     <div className="auth-page">
       <div className="auth-panel-left">
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-          <Boxes size={36} color="#5b9bf8" />
-          <span style={{ fontSize: 28, fontWeight: 800, color: "#fff" }}>Oscar</span>
+          <img
+            src="/oscar-logo.png"
+            alt="Oscar Auto Flux"
+            style={{
+              height: 52,
+              maxWidth: 280,
+              objectFit: "contain",
+              filter: "drop-shadow(0 4px 16px rgba(37, 99, 235, 0.4))",
+            }}
+          />
         </div>
         <h2 style={{ fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.3 }}>
           Start your free<br />trial today
@@ -322,9 +347,18 @@ export function RegisterPage() {
       </div>
       <div className="auth-panel-right">
         <div className="auth-card">
-          <div className="auth-mobile-header">
-            <Boxes size={32} color="#1565d8" />
-            <span style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>Oscar</span>
+          <div className="auth-mobile-header" style={{ textAlign: "center", marginBottom: 16 }}>
+            <img
+              src="/oscar-logo.png"
+              alt="Oscar Auto Flux"
+              style={{
+                height: 44,
+                maxWidth: 240,
+                objectFit: "contain",
+                margin: "0 auto",
+                display: "block",
+              }}
+            />
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Create your organization</h1>
           <p style={{ color: "var(--text-muted)", marginBottom: 24, fontSize: 13 }}>Fill in the details to get started.</p>
@@ -7700,9 +7734,11 @@ export function PrintEstimateModal({
           <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr", borderBottom: "1.5px solid #000", paddingBottom: 10, marginBottom: 10 }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#1e3a8a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16 }}>
-                  OAF
-                </div>
+                <img
+                  src="/oscar-icon.png"
+                  alt="Oscar Auto Flux Logo"
+                  style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }}
+                />
                 <div>
                   <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#1e3a8a", letterSpacing: "0.5px" }}>
                     OSCAR AUTO FLUX
@@ -9645,9 +9681,11 @@ export function PrintInvoiceModal({
           <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1.2fr", borderBottom: "1.5px solid #000", paddingBottom: 10, marginBottom: 10 }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#1e3a8a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16 }}>
-                  OAF
-                </div>
+                <img
+                  src="/oscar-icon.png"
+                  alt="Oscar Auto Flux Logo"
+                  style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }}
+                />
                 <div>
                   <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#1e3a8a", letterSpacing: "0.5px" }}>
                     OSCAR AUTO FLUX
