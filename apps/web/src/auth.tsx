@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "./api";
 
 export interface SessionUser {
@@ -30,6 +31,7 @@ const Ctx = createContext<AuthCtx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
 
   async function loadMe() {
     const token = localStorage.getItem("accessToken");
@@ -43,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       localStorage.removeItem("accessToken");
       setUser(null);
+      qc.clear();
     } finally {
       setLoading(false);
     }
@@ -53,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string, organizationSlug?: string) {
+    qc.clear();
     const { data } = await api.post("/auth/login", {
       email,
       password,
@@ -69,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firstName: string;
     lastName: string;
   }) {
+    qc.clear();
     const { data } = await api.post("/auth/register", payload);
     localStorage.setItem("accessToken", data.accessToken);
     await loadMe();
@@ -82,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       localStorage.removeItem("accessToken");
       setUser(null);
+      qc.clear();
     }
   }
 

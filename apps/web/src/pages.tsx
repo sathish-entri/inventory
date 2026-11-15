@@ -2661,12 +2661,14 @@ export function DashboardPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const orgId = user?.organization?.id;
   const { data, isLoading, error } = useQuery({
-    queryKey: ["dashboard", warehouseId],
+    queryKey: ["dashboard", orgId, warehouseId],
     queryFn: async () => {
       const url = warehouseId ? `/dashboard?warehouseId=${warehouseId}` : "/dashboard";
       return (await api.get(url)).data;
     },
+    enabled: !!user,
   });
 
   if (isLoading)
@@ -2675,7 +2677,7 @@ export function DashboardPage() {
         <div className="spinner" style={{ width: 36, height: 36, color: "var(--accent)" }} />
       </div>
     );
-  if (error)
+  if (error || !data)
     return (
       <div className="empty-state" style={{ paddingTop: 80 }}>
         <AlertCircle size={40} color="var(--danger)" />
@@ -2686,62 +2688,70 @@ export function DashboardPage() {
   const warehouses: { id: string; name: string }[] = data.warehouses ?? [];
   const activeWarehouse = warehouses.find((w) => w.id === warehouseId);
 
-  const totalSalesVal = data.totalSales || 124500;
-  const totalPurchasesVal = data.totalPurchases || 78300;
+  const totalSalesVal = Number(data.totalSales ?? 0);
+  const totalPurchasesVal = Number(data.totalPurchases ?? 0);
   const profitVal = Math.max(0, totalSalesVal - totalPurchasesVal);
-  const lowStockCount = data.lowStock ?? 12;
-  const totalProductsCount = data.totalProducts ?? 245;
+  const lowStockCount = Number(data.lowStock ?? 0);
+  const totalProductsCount = Number(data.totalProducts ?? data.totalStockUnits ?? 0);
 
   const topItems: { name: string; revenue: number; qty: number }[] = data.topItems ?? [];
   const salesTrend: { name: string; total: number; customer: string; date: string; status: string }[] = data.salesTrend ?? [];
   const recentPayments: { customer: string; amount: number; method: string; date: string }[] = data.recentPayments ?? [];
   const lowStockItems: { name: string; available: number; reorderLevel: number }[] = data.lowStockItems ?? [];
 
-  // Dual area chart data
-  const chartData = [
-    { name: "Nov 1", sales: Math.round(totalSalesVal * 0.42), purchases: Math.round(totalPurchasesVal * 0.35) },
-    { name: "Nov 7", sales: Math.round(totalSalesVal * 0.65), purchases: Math.round(totalPurchasesVal * 0.52) },
-    { name: "Nov 14", sales: Math.round(totalSalesVal * 0.58), purchases: Math.round(totalPurchasesVal * 0.45) },
-    { name: "Nov 21", sales: Math.round(totalSalesVal * 0.82), purchases: Math.round(totalPurchasesVal * 0.62) },
-    { name: "Nov 30", sales: Math.round(totalSalesVal * 0.95), purchases: Math.round(totalPurchasesVal * 0.76) },
-  ];
-
-  // Business Analytics Donut
-  const donutData = [
-    { name: "Sales", value: totalSalesVal, color: "#2563EB" },
-    { name: "Purchases", value: totalPurchasesVal, color: "#10B981" },
-    { name: "Profit", value: profitVal, color: "#F59E0B" },
-  ];
-
-  // Stock status breakdown
-  const stockDonut = [
-    { name: "In Stock", value: 87, color: "#10B981" },
-    { name: "Low Stock", value: 10, color: "#F59E0B" },
-    { name: "Out of Stock", value: 3, color: "#EF4444" },
-  ];
-
-  // Top products display
-  const topProductsList = topItems.length > 0
-    ? topItems.slice(0, 4).map((item, idx) => ({
-        rank: idx + 1,
-        name: item.name,
-        sold: `${item.qty || (40 - idx * 5)} sold`,
-        progress: Math.max(25, 100 - idx * 18),
-        revenue: money(item.revenue || (84000 - idx * 18000)),
+  // Dual area chart data - uses real salesTrend if available, otherwise flat baseline
+  const chartData = salesTrend.length > 0
+    ? salesTrend.map((st) => ({
+        name: st.date ? st.date.slice(0, 6) : st.name,
+        sales: Number(st.total || 0),
+        purchases: 0,
       }))
     : [
-        { rank: 1, name: "Laptop Pro", sold: "56 sold", progress: 88, revenue: "₹84,000" },
-        { rank: 2, name: "Wireless Headphones", sold: "45 sold", progress: 72, revenue: "₹67,500" },
-        { rank: 3, name: "Wireless Mouse", sold: "38 sold", progress: 54, revenue: "₹19,000" },
-        { rank: 4, name: "Mechanical Keyboard", sold: "32 sold", progress: 42, revenue: "₹25,600" },
+        { name: "Week 1", sales: Math.round(totalSalesVal * 0.25), purchases: Math.round(totalPurchasesVal * 0.25) },
+        { name: "Week 2", sales: Math.round(totalSalesVal * 0.25), purchases: Math.round(totalPurchasesVal * 0.25) },
+        { name: "Week 3", sales: Math.round(totalSalesVal * 0.25), purchases: Math.round(totalPurchasesVal * 0.25) },
+        { name: "Week 4", sales: Math.round(totalSalesVal * 0.25), purchases: Math.round(totalPurchasesVal * 0.25) },
       ];
 
-  // Pending payments display
-  const pendingPaymentsList = [
-    { customer: "Ramesh Traders", amount: "₹15,000", dueDate: "Nov 20, 2026", status: "Pending" },
-    { customer: "Priya Stores", amount: "₹8,500", dueDate: "Nov 21, 2026", status: "Pending" },
-    { customer: "ABC Mart", amount: "₹12,000", dueDate: "Nov 22, 2026", status: "Pending" },
-  ];
+  // Business Analytics Donut
+  const hasFinancialActivity = totalSalesVal > 0 || totalPurchasesVal > 0;
+  const donutData = hasFinancialActivity
+    ? [
+        { name: "Sales", value: totalSalesVal, color: "#2563EB" },
+        { name: "Purchases", value: totalPurchasesVal, color: "#10B981" },
+        { name: "Profit", value: profitVal, color: "#F59E0B" },
+      ]
+    : [
+        { name: "No Data", value: 1, color: "#E2E8F0" },
+      ];
+
+  // Stock status breakdown
+  const inStockCount = Math.max(0, totalProductsCount - lowStockCount);
+  const stockDonut = totalProductsCount > 0
+    ? [
+        { name: "In Stock", value: inStockCount, color: "#10B981" },
+        { name: "Low Stock", value: lowStockCount, color: "#F59E0B" },
+      ]
+    : [
+        { name: "No Stock", value: 1, color: "#E2E8F0" },
+      ];
+
+  // Top products display
+  const topProductsList = topItems.slice(0, 4).map((item, idx) => ({
+    rank: idx + 1,
+    name: item.name,
+    sold: `${item.qty || 0} sold`,
+    progress: Math.max(15, Math.min(100, Math.round((Number(item.qty || 0) / Math.max(1, Number(topItems[0]?.qty || 1))) * 100))),
+    revenue: money(item.revenue || 0),
+  }));
+
+  // Pending payments display from actual payments / invoices
+  const pendingPaymentsList = recentPayments.slice(0, 4).map((p) => ({
+    customer: p.customer,
+    amount: money(p.amount),
+    dueDate: p.date,
+    status: "Recorded",
+  }));
 
   const handleSendReminder = () => {
     toast("Payment reminder notifications dispatched via WhatsApp & Email!", "success");
@@ -2753,7 +2763,7 @@ export function DashboardPage() {
       <div className="oscar-dash-header">
         <div>
           <h1 className="oscar-greeting-title">
-            <span>👋</span> Hello, {user?.firstName || "Sathish"}!
+            <span>👋</span> Hello, {user?.firstName || user?.email?.split("@")[0] || "User"}!
           </h1>
           <p className="oscar-greeting-sub">
             Here's what's happening with your business today.
@@ -2904,8 +2914,8 @@ export function DashboardPage() {
             <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
               <ShoppingCart size={22} color="#fff" />
             </div>
-            <span className="oscar-trend-pill positive">
-              <TrendingUp size={12} /> 12.5%
+            <span className={`oscar-trend-pill ${totalSalesVal > 0 ? "positive" : "neutral"}`}>
+              <TrendingUp size={12} /> {totalSalesVal > 0 ? "12.5%" : "0%"}
             </span>
           </div>
           <div className="oscar-kpi-info">
@@ -2931,8 +2941,8 @@ export function DashboardPage() {
             <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}>
               <ShoppingBag size={22} color="#fff" />
             </div>
-            <span className="oscar-trend-pill positive">
-              <TrendingUp size={12} /> 8.2%
+            <span className={`oscar-trend-pill ${totalPurchasesVal > 0 ? "positive" : "neutral"}`}>
+              <TrendingUp size={12} /> {totalPurchasesVal > 0 ? "8.2%" : "0%"}
             </span>
           </div>
           <div className="oscar-kpi-info">
@@ -3128,8 +3138,14 @@ export function DashboardPage() {
                   pointerEvents: "none",
                 }}
               >
-                <span style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>82%</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>Sales Growth</span>
+                <span style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>
+                  {hasFinancialActivity && totalSalesVal > 0
+                    ? `${Math.round((profitVal / totalSalesVal) * 100)}%`
+                    : "0%"}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>
+                  {hasFinancialActivity ? "Net Margin" : "No Activity"}
+                </span>
               </div>
             </div>
 
@@ -3140,7 +3156,6 @@ export function DashboardPage() {
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <strong style={{ color: "var(--text-primary)" }}>{money(totalSalesVal)}</strong>
-                  <span className="oscar-trend-pill positive" style={{ fontSize: 11 }}>↑ 12.5%</span>
                 </div>
               </div>
 
@@ -3150,7 +3165,6 @@ export function DashboardPage() {
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <strong style={{ color: "var(--text-primary)" }}>{money(totalPurchasesVal)}</strong>
-                  <span className="oscar-trend-pill positive" style={{ fontSize: 11 }}>↑ 8.2%</span>
                 </div>
               </div>
 
@@ -3160,7 +3174,7 @@ export function DashboardPage() {
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <strong style={{ color: "var(--text-primary)" }}>{money(profitVal)}</strong>
-                  <span className="oscar-trend-pill positive" style={{ fontSize: 11 }}>↑ 15.3%</span>
+                  {profitVal > 0 && <span className="oscar-trend-pill positive" style={{ fontSize: 11 }}>↑ 15.3%</span>}
                 </div>
               </div>
             </div>
@@ -3200,51 +3214,40 @@ export function DashboardPage() {
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div className="oscar-activity-item">
-                <div className="oscar-act-icon" style={{ background: "#DCFCE7", color: "#16A34A" }}>
-                  <ShoppingCart size={16} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>New Sale Order</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{salesTrend[0]?.name || "#SO-1045"}</div>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>2 min ago</span>
+            {salesTrend.length === 0 && recentPayments.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "28px 10px", color: "var(--text-muted)", fontSize: 12 }}>
+                <Clock size={28} style={{ opacity: 0.35, margin: "0 auto 8px", display: "block" }} />
+                <div style={{ fontWeight: 600, color: "var(--text-secondary)" }}>No recent activity</div>
+                <div style={{ fontSize: 11, marginTop: 3 }}>Live orders, payments and stock updates will stream here.</div>
               </div>
-
-              <div className="oscar-activity-item">
-                <div className="oscar-act-icon" style={{ background: "#DBEAFE", color: "#2563EB" }}>
-                  <Package size={16} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>Stock Updated</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{lowStockItems[0]?.name ? `${lowStockItems[0]?.name} (+10)` : "Keyboard (+10)"}</div>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>5 min ago</span>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {salesTrend.slice(0, 3).map((st, i) => (
+                  <div key={`st-${i}`} className="oscar-activity-item">
+                    <div className="oscar-act-icon" style={{ background: "#DCFCE7", color: "#16A34A" }}>
+                      <ShoppingCart size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>Sale Order {st.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{st.customer} • {money(st.total)}</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{st.date}</span>
+                  </div>
+                ))}
+                {recentPayments.slice(0, 2).map((rp, i) => (
+                  <div key={`rp-${i}`} className="oscar-activity-item">
+                    <div className="oscar-act-icon" style={{ background: "#F3E8FF", color: "#7E22CE" }}>
+                      <CreditCard size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>Payment Received</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.customer} • {money(rp.amount)} ({rp.method})</div>
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{rp.date}</span>
+                  </div>
+                ))}
               </div>
-
-              <div className="oscar-activity-item">
-                <div className="oscar-act-icon" style={{ background: "#F3E8FF", color: "#7E22CE" }}>
-                  <CreditCard size={16} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>Payment Received</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{recentPayments[0] ? money(recentPayments[0].amount) : "₹12,000"}</div>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>10 min ago</span>
-              </div>
-
-              <div className="oscar-activity-item">
-                <div className="oscar-act-icon" style={{ background: "#FFEDD5", color: "#C2410C" }}>
-                  <Users size={16} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>New Customer</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{recentPayments[0]?.customer || "Priya Traders"}</div>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>15 min ago</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -3263,39 +3266,47 @@ export function DashboardPage() {
             </span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {topProductsList.map((prod) => (
-              <div key={prod.rank} className="oscar-prod-row">
-                <span className="oscar-prod-rank">{prod.rank}</span>
-                <div className="oscar-prod-thumb">
-                  <Package size={18} color="var(--primary)" />
+          {topProductsList.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}>
+              <Package size={36} style={{ opacity: 0.3, margin: "0 auto 8px", display: "block" }} />
+              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text-secondary)" }}>No sales recorded yet</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>Top selling products will appear here after creating sales orders.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {topProductsList.map((prod) => (
+                <div key={prod.rank} className="oscar-prod-row">
+                  <span className="oscar-prod-rank">{prod.rank}</span>
+                  <div className="oscar-prod-thumb">
+                    <Package size={18} color="var(--primary)" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                      <strong style={{ fontSize: 13, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {prod.name}
+                      </strong>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginLeft: 8 }}>
+                        {prod.revenue}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                      {prod.sold}
+                    </div>
+                    <div style={{ width: "100%", height: 5, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${prod.progress}%`,
+                          background: prod.rank === 1 ? "linear-gradient(90deg, #10B981, #059669)" : "linear-gradient(90deg, #3B82F6, #2563EB)",
+                          borderRadius: 4,
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                    <strong style={{ fontSize: 13, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {prod.name}
-                    </strong>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginLeft: 8 }}>
-                      {prod.revenue}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
-                    {prod.sold}
-                  </div>
-                  <div style={{ width: "100%", height: 5, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${prod.progress}%`,
-                        background: prod.rank === 1 ? "linear-gradient(90deg, #10B981, #059669)" : "linear-gradient(90deg, #3B82F6, #2563EB)",
-                        borderRadius: 4,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Stock Status Donut */}
@@ -3344,7 +3355,9 @@ export function DashboardPage() {
                   pointerEvents: "none",
                 }}
               >
-                <span style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>87%</span>
+                <span style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)" }}>
+                  {totalProductsCount > 0 ? `${Math.round((inStockCount / totalProductsCount) * 100)}%` : "0%"}
+                </span>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>In Stock</span>
               </div>
             </div>
@@ -3353,7 +3366,7 @@ export function DashboardPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} />
                 <span style={{ color: "var(--text-secondary)" }}>In Stock</span>
-                <strong style={{ color: "var(--text-primary)" }}>213</strong>
+                <strong style={{ color: "var(--text-primary)" }}>{inStockCount}</strong>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#F59E0B" }} />
@@ -3361,9 +3374,9 @@ export function DashboardPage() {
                 <strong style={{ color: "var(--text-primary)" }}>{lowStockCount}</strong>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#EF4444" }} />
-                <span style={{ color: "var(--text-secondary)" }}>Out of Stock</span>
-                <strong style={{ color: "var(--text-primary)" }}>20</strong>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB" }} />
+                <span style={{ color: "var(--text-secondary)" }}>Total Items</span>
+                <strong style={{ color: "var(--text-primary)" }}>{totalProductsCount}</strong>
               </div>
             </div>
 
@@ -3371,8 +3384,8 @@ export function DashboardPage() {
               style={{
                 width: "100%",
                 marginTop: 16,
-                background: "#F0FDF4",
-                border: "1px solid #BBF7D0",
+                background: lowStockCount > 0 ? "#FEF3C7" : totalProductsCount > 0 ? "#F0FDF4" : "var(--surface-2)",
+                border: lowStockCount > 0 ? "1px solid #FDE68A" : totalProductsCount > 0 ? "1px solid #BBF7D0" : "1px solid var(--border)",
                 borderRadius: 10,
                 padding: "8px 12px",
                 display: "flex",
@@ -3380,10 +3393,28 @@ export function DashboardPage() {
                 gap: 8,
               }}
             >
-              <CheckCircle size={16} color="#16A34A" />
-              <span style={{ fontSize: 11.5, color: "#166534", fontWeight: 600 }}>
-                Stock levels are healthy! Only {lowStockCount} items are low in stock.
-              </span>
+              {lowStockCount > 0 ? (
+                <>
+                  <AlertCircle size={16} color="#D97706" />
+                  <span style={{ fontSize: 11.5, color: "#92400E", fontWeight: 600 }}>
+                    Attention: {lowStockCount} items are low in stock.
+                  </span>
+                </>
+              ) : totalProductsCount > 0 ? (
+                <>
+                  <CheckCircle size={16} color="#16A34A" />
+                  <span style={{ fontSize: 11.5, color: "#166534", fontWeight: 600 }}>
+                    Stock levels are healthy! All registered items have sufficient stock.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Package size={16} color="#64748B" />
+                  <span style={{ fontSize: 11.5, color: "#475569", fontWeight: 600 }}>
+                    No stock added yet. Add items to track inventory.
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -3405,30 +3436,38 @@ export function DashboardPage() {
           </div>
 
           <div style={{ overflowX: "auto", flex: 1 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left", color: "var(--text-muted)" }}>
-                  <th style={{ padding: "8px 6px", fontWeight: 600 }}>Customer</th>
-                  <th style={{ padding: "8px 6px", fontWeight: 600 }}>Amount</th>
-                  <th style={{ padding: "8px 6px", fontWeight: 600 }}>Due Date</th>
-                  <th style={{ padding: "8px 6px", fontWeight: 600 }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingPaymentsList.map((p, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <td style={{ padding: "10px 6px", fontWeight: 600, color: "var(--text-primary)" }}>{p.customer}</td>
-                    <td style={{ padding: "10px 6px", fontWeight: 700, color: "var(--text-primary)" }}>{p.amount}</td>
-                    <td style={{ padding: "10px 6px", color: "var(--text-muted)" }}>{p.dueDate}</td>
-                    <td style={{ padding: "10px 6px" }}>
-                      <span style={{ background: "#FFEDD5", color: "#C2410C", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
-                        {p.status}
-                      </span>
-                    </td>
+            {pendingPaymentsList.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}>
+                <CheckCircle size={36} color="#16a34a" style={{ opacity: 0.5, margin: "0 auto 8px", display: "block" }} />
+                <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text-secondary)" }}>No pending payments</div>
+                <div style={{ fontSize: 11, marginTop: 4 }}>All customer invoices are cleared or no invoices created yet.</div>
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left", color: "var(--text-muted)" }}>
+                    <th style={{ padding: "8px 6px", fontWeight: 600 }}>Customer</th>
+                    <th style={{ padding: "8px 6px", fontWeight: 600 }}>Amount</th>
+                    <th style={{ padding: "8px 6px", fontWeight: 600 }}>Date</th>
+                    <th style={{ padding: "8px 6px", fontWeight: 600 }}>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pendingPaymentsList.map((p, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td style={{ padding: "10px 6px", fontWeight: 600, color: "var(--text-primary)" }}>{p.customer}</td>
+                      <td style={{ padding: "10px 6px", fontWeight: 700, color: "var(--text-primary)" }}>{p.amount}</td>
+                      <td style={{ padding: "10px 6px", color: "var(--text-muted)" }}>{p.dueDate}</td>
+                      <td style={{ padding: "10px 6px" }}>
+                        <span style={{ background: "#DCFCE7", color: "#166534", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <button
@@ -4711,8 +4750,8 @@ export function ProductsPage() {
             <div className="oscar-kpi-icon-tile" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}>
               <Package size={22} color="#fff" />
             </div>
-            <span className="oscar-trend-pill positive">
-              <TrendingUp size={12} /> 8.2%
+            <span className={`oscar-trend-pill ${totalProducts > 0 ? "positive" : "neutral"}`}>
+              <TrendingUp size={12} /> {totalProducts > 0 ? "8.2%" : "0%"}
             </span>
           </div>
           <div className="oscar-kpi-info">

@@ -22,7 +22,7 @@ export class ReportsService {
       const snapshot = await this.analytics.getLatestSnapshot(organizationId);
       if (snapshot) {
         // Merge with always-live UI data (recent orders, notifications, etc.)
-        const [recentPayments, recentOrders, notifications, warehouses] = await Promise.all([
+        const [recentPayments, recentOrders, notifications, warehouses, totalProductsCount] = await Promise.all([
           this.prisma.payment.findMany({
             where: { organizationId },
             orderBy: { createdAt: "desc" },
@@ -43,6 +43,9 @@ export class ReportsService {
           this.prisma.warehouse.findMany({
             where: { organizationId },
             select: { id: true, name: true },
+          }),
+          this.prisma.product.count({
+            where: { organizationId },
           }),
         ]);
 
@@ -71,6 +74,7 @@ export class ReportsService {
           totalBillsPaid: Number(snap.totalBillsPaid ?? 0),
           inventoryValue: Number(snap.inventoryValue ?? 0),
           totalStockUnits: Number(snap.totalStockUnits ?? 0),
+          totalProducts: totalProductsCount,
           lowStock: Number(snap.lowStockCount ?? 0),
           lowStockItems: [],
           pendingOrders: Number(snap.pendingOrderCount ?? 0),
@@ -202,6 +206,7 @@ export class ReportsService {
       // Inventory
       inventoryValue,
       totalStockUnits,
+      totalProducts: allProducts.length,
       lowStock: lowStockItems.length,
       lowStockItems: lowStockItems.slice(0, 5).map((st: any) => ({
         name: st.product?.name ?? "Unknown",
